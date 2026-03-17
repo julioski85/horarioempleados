@@ -1,5 +1,0 @@
-.env
-/public/assets/uploads/base/*
-/public/assets/uploads/selfies/*
-!/public/assets/uploads/base/.gitkeep
-!/public/assets/uploads/selfies/.gitkeep
