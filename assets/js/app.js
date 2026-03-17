@@ -30,6 +30,9 @@ async function kioskSearch() {
   document.getElementById('employee-id').value = data.employee.id;
   document.querySelector('#kiosk-employee strong').textContent = data.employee.full_name;
   document.querySelector('#kiosk-employee span').textContent = data.employee.status;
+  if (data.employee.photo_path) {
+    document.querySelector('#kiosk-employee img').src = (window.toUrl ? window.toUrl('') : '') + data.employee.photo_path;
+  }
 }
 
 async function kioskRegister() {
