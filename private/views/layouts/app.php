@@ -9,6 +9,13 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="<?= htmlspecialchars(($base_path ?? '') . '/assets/css/app.css') ?>">
+  <script>
+    (function () {
+      var savedTheme = localStorage.getItem('app-theme');
+      var theme = savedTheme || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
 </head>
 <body>
 <div class="app-shell">
@@ -29,7 +36,10 @@
         <h1><?= htmlspecialchars($title ?? '') ?></h1>
         <p>Panel de control de asistencia</p>
       </div>
-      <div class="user-pill"><?= htmlspecialchars($user['name'] ?? 'Usuario') ?></div>
+      <div class="topbar-actions">
+        <button type="button" class="theme-toggle" data-theme-toggle aria-label="Cambiar tema">🌙 Tema</button>
+        <div class="user-pill"><?= htmlspecialchars($user['name'] ?? 'Usuario') ?></div>
+      </div>
     </header>
     <?= $content ?>
   </main>

@@ -3,6 +3,28 @@
   const toUrl = (path) => base + path;
   window.toUrl = toUrl;
 
+  const root = document.documentElement;
+  const themeButtons = document.querySelectorAll('[data-theme-toggle]');
+  const setTheme = (theme) => {
+    root.setAttribute('data-theme', theme);
+    try {
+      localStorage.setItem('app-theme', theme);
+    } catch (e) {
+      // no-op
+    }
+    themeButtons.forEach((button) => {
+      button.textContent = theme === 'dark' ? '☀️ Modo claro' : '🌙 Modo oscuro';
+    });
+  };
+  const currentTheme = root.getAttribute('data-theme') || 'light';
+  setTheme(currentTheme);
+  themeButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      const nextTheme = (root.getAttribute('data-theme') || 'light') === 'dark' ? 'light' : 'dark';
+      setTheme(nextTheme);
+    });
+  });
+
   const pinGrid = document.getElementById('pin-grid');
   if (pinGrid) {
     const pinValue = document.getElementById('pin-value');

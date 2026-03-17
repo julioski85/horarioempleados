@@ -8,8 +8,16 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="<?= htmlspecialchars(($base_path ?? '') . '/assets/css/app.css') ?>">
+  <script>
+    (function () {
+      var savedTheme = localStorage.getItem('app-theme');
+      var theme = savedTheme || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
 </head>
 <body>
+<button type="button" class="theme-toggle theme-toggle-floating" data-theme-toggle aria-label="Cambiar tema">🌙 Tema</button>
 <?= $content ?>
 <script>window.APP_BASE_PATH = <?= json_encode($base_path ?? '') ?>;</script>
 <script src="<?= htmlspecialchars(($base_path ?? '') . '/assets/js/app.js') ?>"></script>
