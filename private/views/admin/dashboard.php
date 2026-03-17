@@ -17,7 +17,7 @@
         <td><?= htmlspecialchars($row['full_name']) ?></td>
         <td><?= htmlspecialchars(ucfirst($row['event_type'])) ?></td>
         <td><?= htmlspecialchars($row['created_at']) ?></td>
-        <td><span class="badge ok">Confirmado</span></td>
+        <td><span class="badge ok"><?= htmlspecialchars($row['status'] ?? 'Confirmado') ?></span></td>
       </tr>
       <?php endforeach; ?>
     </tbody>

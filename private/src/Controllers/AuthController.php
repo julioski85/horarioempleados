@@ -6,9 +6,11 @@ namespace App\Controllers;
 
 use App\Core\Auth;
 use App\Core\Csrf;
+use App\Core\DB;
 use App\Core\Env;
 use App\Core\Response;
 use App\Core\View;
+use PDO;
 
 final class AuthController
 {
@@ -52,7 +54,21 @@ final class AuthController
             $_SESSION['error'] = 'Sesión expirada.';
             Response::redirect('/login');
         }
-        Auth::login(['name' => 'Empleado', 'email' => $_POST['email'] ?? '', 'role' => 'employee']);
+
+        $email = trim((string) ($_POST['email'] ?? ''));
+        $password = (string) ($_POST['password'] ?? '');
+
+        $pdo = DB::pdo();
+        $st = $pdo->prepare('SELECT id,full_name,email,password_hash,is_active FROM employees WHERE email=? LIMIT 1');
+        $st->execute([$email]);
+        $employee = $st->fetch(PDO::FETCH_ASSOC);
+
+        if (!$employee || (int) $employee['is_active'] !== 1 || !password_verify($password, (string) $employee['password_hash'])) {
+            $_SESSION['error'] = 'Credenciales de empleado inválidas.';
+            Response::redirect('/login');
+        }
+
+        Auth::login(['id' => (int) $employee['id'], 'name' => $employee['full_name'], 'email' => $employee['email'], 'role' => 'employee']);
         session_regenerate_id(true);
         Response::redirect('/employee/dashboard');
     }

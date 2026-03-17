@@ -3,6 +3,7 @@
     <h3>Nuevo empleado</h3>
     <form method="post" action="<?= htmlspecialchars(($base_path ?? '') . '/admin/employees/save') ?>" class="form-grid">
       <input type="hidden" name="_csrf" value="<?= htmlspecialchars($csrf) ?>">
+      <label>ID corto<input name="short_id" maxlength="32" placeholder="EMP-0001"></label>
       <label>Nombre completo<input name="full_name" required></label>
       <label>Email<input type="email" name="email" required></label>
       <label>PIN kiosco<input name="pin" maxlength="6" required></label>
@@ -13,14 +14,14 @@
   <section class="card table-card">
     <h3>Gestión de empleados</h3>
     <table>
-      <thead><tr><th>Empleado</th><th>Email</th><th>PIN</th><th>Estatus</th></tr></thead>
+      <thead><tr><th>ID corto</th><th>Empleado</th><th>Email</th><th>Estatus</th></tr></thead>
       <tbody>
       <?php foreach ($employees as $e): ?>
       <tr>
+        <td><?= htmlspecialchars((string) ($e['short_id'] ?? '')) ?></td>
         <td><?= htmlspecialchars($e['full_name']) ?></td>
         <td><?= htmlspecialchars($e['email']) ?></td>
-        <td><?= htmlspecialchars($e['pin']) ?></td>
-        <td><span class="badge <?= $e['status'] === 'Activo' ? 'ok' : 'warn' ?>"><?= htmlspecialchars($e['status']) ?></span></td>
+        <td><span class="badge <?= ((int) ($e['is_active'] ?? 0) === 1) ? 'ok' : 'warn' ?>"><?= ((int) ($e['is_active'] ?? 0) === 1) ? 'Activo' : 'Inactivo' ?></span></td>
       </tr>
       <?php endforeach; ?>
       </tbody>
