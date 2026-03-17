@@ -11,7 +11,7 @@
   </section>
   <section class="card form-card">
     <h3>Nueva solicitud</h3>
-    <form method="post" action="/employee/request" class="form-grid">
+    <form method="post" action="<?= htmlspecialchars(($base_path ?? '') . '/employee/request') ?>" class="form-grid">
       <input type="hidden" name="_csrf" value="<?= htmlspecialchars($csrf) ?>">
       <label>Tipo<select name="type"><option>Permiso</option><option>Vacaciones</option></select></label>
       <button class="btn btn-primary" type="submit">Enviar</button>

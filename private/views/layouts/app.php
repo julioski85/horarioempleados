@@ -8,20 +8,20 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/assets/css/app.css">
+  <link rel="stylesheet" href="<?= htmlspecialchars(($base_path ?? '') . '/assets/css/app.css') ?>">
 </head>
 <body>
 <div class="app-shell">
   <aside class="sidebar">
     <div class="logo">Horario<span>Pro</span></div>
     <nav>
-      <a href="/admin/dashboard">Dashboard</a>
-      <a href="/admin/employees">Empleados</a>
-      <a href="/admin/requests">Solicitudes</a>
-      <a href="/admin/reports">Reportes</a>
-      <a href="/kiosk">Kiosco</a>
+      <a href="<?= htmlspecialchars(($base_path ?? '') . '/admin/dashboard') ?>">Dashboard</a>
+      <a href="<?= htmlspecialchars(($base_path ?? '') . '/admin/employees') ?>">Empleados</a>
+      <a href="<?= htmlspecialchars(($base_path ?? '') . '/admin/requests') ?>">Solicitudes</a>
+      <a href="<?= htmlspecialchars(($base_path ?? '') . '/admin/reports') ?>">Reportes</a>
+      <a href="<?= htmlspecialchars(($base_path ?? '') . '/kiosk') ?>">Kiosco</a>
     </nav>
-    <a class="logout" href="/logout">Cerrar sesión</a>
+    <a class="logout" href="<?= htmlspecialchars(($base_path ?? '') . '/logout') ?>">Cerrar sesión</a>
   </aside>
   <main class="main-area">
     <header class="topbar">
@@ -34,6 +34,7 @@
     <?= $content ?>
   </main>
 </div>
-<script src="/assets/js/app.js"></script>
+<script>window.APP_BASE_PATH = <?= json_encode($base_path ?? '') ?>;</script>
+<script src="<?= htmlspecialchars(($base_path ?? '') . '/assets/js/app.js') ?>"></script>
 </body>
 </html>

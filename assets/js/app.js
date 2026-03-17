@@ -1,4 +1,8 @@
 (function () {
+  const base = window.APP_BASE_PATH || '';
+  const toUrl = (path) => base + path;
+  window.toUrl = toUrl;
+
   const pinGrid = document.getElementById('pin-grid');
   if (pinGrid) {
     const pinValue = document.getElementById('pin-value');
@@ -20,7 +24,7 @@
 
 async function kioskSearch() {
   const q = document.getElementById('kiosk-search').value;
-  const res = await fetch('/kiosk/search?q=' + encodeURIComponent(q));
+  const res = await fetch((window.toUrl ? window.toUrl('/kiosk/search') : '/kiosk/search') + '?q=' + encodeURIComponent(q));
   const data = await res.json();
   if (!data.employee) return alert('No encontrado');
   document.getElementById('employee-id').value = data.employee.id;
@@ -32,7 +36,7 @@ async function kioskRegister() {
   const payload = new URLSearchParams();
   payload.set('employee_id', document.getElementById('employee-id').value);
   payload.set('pin', document.getElementById('pin-value').value);
-  const res = await fetch('/kiosk/register', { method: 'POST', body: payload });
+  const res = await fetch(window.toUrl ? window.toUrl('/kiosk/register') : '/kiosk/register', { method: 'POST', body: payload });
   const data = await res.json();
   alert(data.message || 'Listo');
 }
