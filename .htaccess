@@ -1,0 +1,27 @@
+Options -Indexes
+DirectoryIndex index.php
+
+<IfModule mod_authz_core.c>
+    <FilesMatch "^(\.env|README\.md|\.gitignore|\.gitkeep)$">
+        Require all denied
+    </FilesMatch>
+</IfModule>
+<IfModule !mod_authz_core.c>
+    <FilesMatch "^(\.env|README\.md|\.gitignore|\.gitkeep)$">
+        Order allow,deny
+        Deny from all
+    </FilesMatch>
+</IfModule>
+
+RewriteEngine On
+
+# Bloquear carpetas privadas
+RewriteRule ^private/ - [F,L,NC]
+
+# Servir archivos y carpetas existentes normalmente
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Enrutador principal
+RewriteRule ^ index.php [QSA,L]

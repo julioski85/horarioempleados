@@ -1,0 +1,21 @@
+SUBE Y EXTRAE ESTE CONTENIDO DENTRO DE LA CARPETA DEL SUBDOMINIO, POR EJEMPLO:
+public_html/asistencia/
+
+ANTES DE ABRIR LA APP, EDITA SOLO ESTE ARCHIVO:
+.env
+
+CAMBIA ESTAS 2 LINEAS:
+APP_URL=https://asistencia.tudominio.com
+DB_PASS=PON_AQUI_TU_PASSWORD_REAL
+
+VERIFICA QUE EXISTAN ESTAS CARPETAS Y TENGAN PERMISO 775:
+assets/uploads/base
+assets/uploads/selfies
+
+LUEGO ABRE:
+/login
+/kiosk
+
+ADMIN DEMO:
+admin@gym.local
+Admin123!
