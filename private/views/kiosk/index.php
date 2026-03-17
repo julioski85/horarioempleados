@@ -7,7 +7,7 @@
       <button class="btn" onclick="kioskSearch()">Buscar</button>
     </div>
     <div id="kiosk-employee" class="kiosk-employee">
-      <img src="/assets/uploads/base/avatar-base.svg" alt="avatar">
+      <img src="<?= htmlspecialchars(($base_path ?? '') . '/assets/uploads/base/avatar-base.svg') ?>" alt="avatar">
       <div><strong>Empleado</strong><span>Sin seleccionar</span></div>
     </div>
     <div class="pin-grid" id="pin-grid"></div>

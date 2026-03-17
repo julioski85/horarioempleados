@@ -1,3 +1,6 @@
+<?php if (!empty($dashboard_error)): ?>
+<section class="card"><p class="alert"><?= htmlspecialchars($dashboard_error) ?></p></section>
+<?php endif; ?>
 <section class="kpi-row">
   <article class="kpi"><span>Total empleados</span><strong><?= (int) $kpis['employees'] ?></strong></article>
   <article class="kpi"><span>Registros hoy</span><strong><?= (int) $kpis['attendance_today'] ?></strong></article>

@@ -6,6 +6,7 @@ namespace App\Controllers;
 
 use App\Core\Auth;
 use App\Core\Csrf;
+use App\Core\Env;
 use App\Core\Response;
 use App\Core\View;
 
@@ -23,7 +24,25 @@ final class AuthController
             $_SESSION['error'] = 'Sesión expirada.';
             Response::redirect('/login');
         }
-        Auth::login(['name' => 'Administrador', 'email' => $_POST['email'] ?? '', 'role' => 'admin']);
+
+        $email = trim((string) ($_POST['email'] ?? ''));
+        $password = (string) ($_POST['password'] ?? '');
+
+        $adminEmail = Env::get('ADMIN_EMAIL', 'admin@gym.local');
+        $adminPass = Env::get('ADMIN_PASS', 'Admin123!');
+        $adminPassHash = Env::get('ADMIN_PASS_HASH');
+
+        $validPassword = $adminPassHash
+            ? password_verify($password, $adminPassHash)
+            : hash_equals($adminPass, $password);
+
+        if (!hash_equals((string) $adminEmail, $email) || !$validPassword) {
+            $_SESSION['error'] = 'Credenciales de administrador inválidas.';
+            Response::redirect('/login');
+        }
+
+        Auth::login(['name' => 'Administrador', 'email' => $email, 'role' => 'admin']);
+        session_regenerate_id(true);
         Response::redirect('/admin/dashboard');
     }
 
@@ -34,6 +53,7 @@ final class AuthController
             Response::redirect('/login');
         }
         Auth::login(['name' => 'Empleado', 'email' => $_POST['email'] ?? '', 'role' => 'employee']);
+        session_regenerate_id(true);
         Response::redirect('/employee/dashboard');
     }
 

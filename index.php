@@ -7,6 +7,7 @@ use App\Controllers\AuthController;
 use App\Controllers\EmployeeController;
 use App\Controllers\KioskController;
 use App\Core\Response;
+use App\Core\Url;
 
 require_once __DIR__ . '/private/config/bootstrap.php';
 require_once __DIR__ . '/private/src/Controllers/AuthController.php';
@@ -14,7 +15,14 @@ require_once __DIR__ . '/private/src/Controllers/AdminController.php';
 require_once __DIR__ . '/private/src/Controllers/EmployeeController.php';
 require_once __DIR__ . '/private/src/Controllers/KioskController.php';
 
-$path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) ?: '/';
+$uriPath = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) ?: '/';
+$basePath = Url::basePath();
+
+if ($basePath !== '' && str_starts_with($uriPath, $basePath)) {
+    $uriPath = substr($uriPath, strlen($basePath)) ?: '/';
+}
+
+$path = '/' . ltrim($uriPath, '/');
 $method = $_SERVER['REQUEST_METHOD'];
 
 $routes = [

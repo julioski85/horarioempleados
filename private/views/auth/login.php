@@ -4,14 +4,14 @@
     <p>Control de asistencia premium</p>
     <?php if (!empty($error)): ?><div class="alert"><?= htmlspecialchars($error) ?></div><?php endif; ?>
     <div class="login-grid">
-      <form method="post" action="/login/admin" class="panel">
+      <form method="post" action="<?= htmlspecialchars(($base_path ?? '') . '/login/admin') ?>" class="panel">
         <input type="hidden" name="_csrf" value="<?= htmlspecialchars($csrf) ?>">
         <h3>Acceso administrador</h3>
         <input name="email" type="email" placeholder="admin@gym.local" required>
         <input name="password" type="password" placeholder="••••••••" required>
         <button class="btn btn-primary" type="submit">Entrar al panel</button>
       </form>
-      <form method="post" action="/login/employee" class="panel">
+      <form method="post" action="<?= htmlspecialchars(($base_path ?? '') . '/login/employee') ?>" class="panel">
         <input type="hidden" name="_csrf" value="<?= htmlspecialchars($csrf) ?>">
         <h3>Acceso empleado</h3>
         <input name="email" type="email" placeholder="ana@gym.local" required>

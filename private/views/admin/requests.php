@@ -10,7 +10,7 @@
         <td><?= htmlspecialchars($r['created_at']) ?></td>
         <td><span class="badge"><?= htmlspecialchars($r['status']) ?></span></td>
         <td>
-          <form method="post" action="/admin/requests/status" class="inline-form">
+          <form method="post" action="<?= htmlspecialchars(($base_path ?? '') . '/admin/requests/status') ?>" class="inline-form">
             <input type="hidden" name="_csrf" value="<?= htmlspecialchars($csrf) ?>">
             <input type="hidden" name="id" value="<?= (int) $r['id'] ?>">
             <select name="status"><option>Pendiente</option><option>Aprobada</option><option>Rechazada</option></select>

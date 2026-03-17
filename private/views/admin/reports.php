@@ -1,5 +1,5 @@
 <section class="card table-card">
-  <div class="card-head"><h3>Reporte de asistencia</h3><a href="/admin/reports/export-csv" class="btn btn-primary">Exportar CSV</a></div>
+  <div class="card-head"><h3>Reporte de asistencia</h3><a href="<?= htmlspecialchars(($base_path ?? '') . '/admin/reports/export-csv') ?>" class="btn btn-primary">Exportar CSV</a></div>
   <table>
     <thead><tr><th>Empleado</th><th>Evento</th><th>Fecha</th></tr></thead>
     <tbody>

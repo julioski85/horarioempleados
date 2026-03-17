@@ -1,7 +1,7 @@
 <div class="split-grid">
   <section class="card form-card">
     <h3>Nuevo empleado</h3>
-    <form method="post" action="/admin/employees/save" class="form-grid">
+    <form method="post" action="<?= htmlspecialchars(($base_path ?? '') . '/admin/employees/save') ?>" class="form-grid">
       <input type="hidden" name="_csrf" value="<?= htmlspecialchars($csrf) ?>">
       <label>Nombre completo<input name="full_name" required></label>
       <label>Email<input type="email" name="email" required></label>
