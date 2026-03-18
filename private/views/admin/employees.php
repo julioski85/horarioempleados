@@ -7,13 +7,16 @@
       </div>
       <span class="badge">Alta</span>
     </div>
-    <form method="post" action="<?= htmlspecialchars(($base_path ?? '') . '/admin/employees/save') ?>" class="form-grid">
+    <form method="post" action="<?= htmlspecialchars(($base_path ?? '') . '/admin/employees/save') ?>" class="form-grid" enctype="multipart/form-data">
       <input type="hidden" name="_csrf" value="<?= htmlspecialchars($csrf) ?>">
       <label>ID corto<input name="short_id" maxlength="32" placeholder="EMP-0001"></label>
       <label>Nombre completo<input name="full_name" required></label>
       <label>Email<input type="email" name="email" required></label>
       <label>PIN kiosco<input name="pin" maxlength="6" required></label>
       <label>Estatus<select name="status"><option>Activo</option><option>Inactivo</option></select></label>
+      <label>Foto del empleado
+        <input type="file" name="photo" accept="image/*" capture="user" required>
+      </label>
       <button class="btn btn-primary" type="submit">Guardar empleado</button>
     </form>
   </section>

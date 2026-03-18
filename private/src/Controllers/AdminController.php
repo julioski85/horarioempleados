@@ -66,6 +66,8 @@ final class AdminController
             $shortId = 'EMP-' . date('YmdHis');
         }
 
+        $photoPath = $this->storeEmployeePhoto($_FILES['photo'] ?? null);
+
         $pdo = DB::pdo();
         $st = $pdo->prepare(
             'INSERT INTO employees(short_id,full_name,email,password_hash,pin_hash,area_id,team_id,base_photo_path,is_active) VALUES(?,?,?,?,?,?,?,?,?)'
@@ -78,7 +80,7 @@ final class AdminController
             password_hash($pin, PASSWORD_DEFAULT),
             null,
             null,
-            '/assets/uploads/base/avatar-base.svg',
+            $photoPath,
             $isActive,
         ]);
         Response::redirect('/admin/employees');
@@ -206,6 +208,44 @@ final class AdminController
         }
         fclose($out);
         exit;
+    }
+
+    private function storeEmployeePhoto(mixed $photo): string
+    {
+        if (!is_array($photo) || !isset($photo['error']) || (int) $photo['error'] !== UPLOAD_ERR_OK) {
+            return '/assets/uploads/base/avatar-base.svg';
+        }
+
+        $tmpName = (string) ($photo['tmp_name'] ?? '');
+        if ($tmpName === '' || !is_uploaded_file($tmpName)) {
+            return '/assets/uploads/base/avatar-base.svg';
+        }
+
+        $mime = mime_content_type($tmpName) ?: '';
+        $extensions = [
+            'image/jpeg' => 'jpg',
+            'image/png' => 'png',
+            'image/webp' => 'webp',
+        ];
+
+        if (!isset($extensions[$mime])) {
+            return '/assets/uploads/base/avatar-base.svg';
+        }
+
+        $fileName = 'employee-' . date('YmdHis') . '-' . bin2hex(random_bytes(4)) . '.' . $extensions[$mime];
+        $relativeDir = '/assets/uploads/employees';
+        $targetDir = dirname(__DIR__, 3) . $relativeDir;
+
+        if (!is_dir($targetDir)) {
+            mkdir($targetDir, 0775, true);
+        }
+
+        $targetPath = $targetDir . '/' . $fileName;
+        if (!move_uploaded_file($tmpName, $targetPath)) {
+            return '/assets/uploads/base/avatar-base.svg';
+        }
+
+        return $relativeDir . '/' . $fileName;
     }
 
     private function resolveColumn(PDO $pdo, string $table, array $candidates): string
