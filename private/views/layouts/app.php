@@ -1,4 +1,4 @@
-<?php use App\Core\Auth; $user = Auth::user(); ?>
+<?php use App\Core\Auth; $user = Auth::user(); $role = $user['role'] ?? ''; ?>
 <!doctype html>
 <html lang="es">
 <head>
@@ -22,10 +22,15 @@
   <aside class="sidebar">
     <div class="logo">Horario<span>Pro</span></div>
     <nav>
+      <?php if ($role === 'admin'): ?>
       <a href="<?= htmlspecialchars(($base_path ?? '') . '/admin/dashboard') ?>">Dashboard</a>
       <a href="<?= htmlspecialchars(($base_path ?? '') . '/admin/employees') ?>">Empleados</a>
       <a href="<?= htmlspecialchars(($base_path ?? '') . '/admin/requests') ?>">Solicitudes</a>
       <a href="<?= htmlspecialchars(($base_path ?? '') . '/admin/reports') ?>">Reportes</a>
+      <?php endif; ?>
+      <?php if ($role === 'employee'): ?>
+      <a href="<?= htmlspecialchars(($base_path ?? '') . '/employee/dashboard') ?>">Mi panel</a>
+      <?php endif; ?>
       <a href="<?= htmlspecialchars(($base_path ?? '') . '/kiosk') ?>">Kiosco</a>
     </nav>
     <a class="logout" href="<?= htmlspecialchars(($base_path ?? '') . '/logout') ?>">Cerrar sesión</a>
@@ -34,7 +39,7 @@
     <header class="topbar">
       <div>
         <h1><?= htmlspecialchars($title ?? '') ?></h1>
-        <p>Panel de control de asistencia</p>
+        <p><?= $role === 'admin' ? 'Panel de control de asistencia' : 'Tu espacio de gestión de asistencia' ?></p>
       </div>
       <div class="topbar-actions">
         <button type="button" class="theme-toggle" data-theme-toggle aria-label="Cambiar tema">🌙 Tema</button>

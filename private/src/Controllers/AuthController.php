@@ -20,7 +20,7 @@ final class AuthController
         unset($_SESSION['error']);
     }
 
-    public function loginAdmin(): void
+    public function login(): void
     {
         if (!Csrf::check($_POST['_csrf'] ?? null)) {
             $_SESSION['error'] = 'Sesión expirada.';
@@ -30,6 +30,27 @@ final class AuthController
         $email = trim((string) ($_POST['email'] ?? ''));
         $password = (string) ($_POST['password'] ?? '');
 
+        if ($this->tryAdminLogin($email, $password)) {
+            return;
+        }
+
+        if ($this->tryEmployeeLogin($email, $password)) {
+            return;
+        }
+
+        $_SESSION['error'] = 'Credenciales inválidas.';
+        Response::redirect('/login');
+    }
+
+    public function logout(): void
+    {
+        Auth::logout();
+        session_regenerate_id(true);
+        Response::redirect('/login');
+    }
+
+    private function tryAdminLogin(string $email, string $password): bool
+    {
         $adminEmail = Env::get('ADMIN_EMAIL', 'admin@gym.local');
         $adminPass = Env::get('ADMIN_PASS', 'Admin123!');
         $adminPassHash = Env::get('ADMIN_PASS_HASH');
@@ -39,44 +60,36 @@ final class AuthController
             : hash_equals($adminPass, $password);
 
         if (!hash_equals((string) $adminEmail, $email) || !$validPassword) {
-            $_SESSION['error'] = 'Credenciales de administrador inválidas.';
-            Response::redirect('/login');
+            return false;
         }
 
         Auth::login(['name' => 'Administrador', 'email' => $email, 'role' => 'admin']);
         session_regenerate_id(true);
         Response::redirect('/admin/dashboard');
+
+        return true;
     }
 
-    public function loginEmployee(): void
+    private function tryEmployeeLogin(string $email, string $password): bool
     {
-        if (!Csrf::check($_POST['_csrf'] ?? null)) {
-            $_SESSION['error'] = 'Sesión expirada.';
-            Response::redirect('/login');
-        }
-
-        $email = trim((string) ($_POST['email'] ?? ''));
-        $password = (string) ($_POST['password'] ?? '');
-
         $pdo = DB::pdo();
         $st = $pdo->prepare('SELECT id,full_name,email,password_hash,is_active FROM employees WHERE email=? LIMIT 1');
         $st->execute([$email]);
         $employee = $st->fetch(PDO::FETCH_ASSOC);
 
         if (!$employee || (int) $employee['is_active'] !== 1 || !password_verify($password, (string) $employee['password_hash'])) {
-            $_SESSION['error'] = 'Credenciales de empleado inválidas.';
-            Response::redirect('/login');
+            return false;
         }
 
-        Auth::login(['id' => (int) $employee['id'], 'name' => $employee['full_name'], 'email' => $employee['email'], 'role' => 'employee']);
+        Auth::login([
+            'id' => (int) $employee['id'],
+            'name' => $employee['full_name'],
+            'email' => $employee['email'],
+            'role' => 'employee',
+        ]);
         session_regenerate_id(true);
         Response::redirect('/employee/dashboard');
-    }
 
-    public function logout(): void
-    {
-        Auth::logout();
-        session_regenerate_id(true);
-        Response::redirect('/login');
+        return true;
     }
 }

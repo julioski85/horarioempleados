@@ -1,6 +1,9 @@
 <div class="split-grid">
   <section class="card form-card">
-    <h3>Nuevo empleado</h3>
+    <div class="card-head">
+      <h3>Nuevo empleado</h3>
+      <span class="badge">Alta</span>
+    </div>
     <form method="post" action="<?= htmlspecialchars(($base_path ?? '') . '/admin/employees/save') ?>" class="form-grid">
       <input type="hidden" name="_csrf" value="<?= htmlspecialchars($csrf) ?>">
       <label>ID corto<input name="short_id" maxlength="32" placeholder="EMP-0001"></label>
@@ -11,20 +14,46 @@
       <button class="btn btn-primary" type="submit">Guardar empleado</button>
     </form>
   </section>
+
   <section class="card table-card">
-    <h3>Gestión de empleados</h3>
-    <table>
-      <thead><tr><th>ID corto</th><th>Empleado</th><th>Email</th><th>Estatus</th></tr></thead>
-      <tbody>
-      <?php foreach ($employees as $e): ?>
-      <tr>
-        <td><?= htmlspecialchars((string) ($e['short_id'] ?? '')) ?></td>
-        <td><?= htmlspecialchars($e['full_name']) ?></td>
-        <td><?= htmlspecialchars($e['email']) ?></td>
-        <td><span class="badge <?= ((int) ($e['is_active'] ?? 0) === 1) ? 'ok' : 'warn' ?>"><?= ((int) ($e['is_active'] ?? 0) === 1) ? 'Activo' : 'Inactivo' ?></span></td>
-      </tr>
-      <?php endforeach; ?>
-      </tbody>
-    </table>
+    <div class="card-head">
+      <h3>Gestión de empleados</h3>
+      <span class="badge"><?= count($employees) ?> registros</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>ID corto</th><th>Empleado</th><th>Email</th><th>Estatus</th><th>Edición</th></tr></thead>
+        <tbody>
+        <?php foreach ($employees as $e): ?>
+        <tr>
+          <td><?= htmlspecialchars((string) ($e['short_id'] ?? '')) ?></td>
+          <td><?= htmlspecialchars($e['full_name']) ?></td>
+          <td><?= htmlspecialchars($e['email']) ?></td>
+          <td><span class="badge <?= ((int) ($e['is_active'] ?? 0) === 1) ? 'ok' : 'warn' ?>"><?= ((int) ($e['is_active'] ?? 0) === 1) ? 'Activo' : 'Inactivo' ?></span></td>
+          <td>
+            <details class="edit-disclosure">
+              <summary class="btn">Editar</summary>
+              <form method="post" action="<?= htmlspecialchars(($base_path ?? '') . '/admin/employees/update') ?>" class="form-grid compact-form">
+                <input type="hidden" name="_csrf" value="<?= htmlspecialchars($csrf) ?>">
+                <input type="hidden" name="id" value="<?= (int) $e['id'] ?>">
+                <label>ID corto<input name="short_id" maxlength="32" value="<?= htmlspecialchars((string) ($e['short_id'] ?? '')) ?>"></label>
+                <label>Nombre<input name="full_name" required value="<?= htmlspecialchars($e['full_name']) ?>"></label>
+                <label>Email<input type="email" name="email" required value="<?= htmlspecialchars($e['email']) ?>"></label>
+                <label>PIN (opcional)<input name="pin" maxlength="6" placeholder="Dejar vacío para no cambiar"></label>
+                <label>Estatus
+                  <select name="status">
+                    <option <?= ((int) ($e['is_active'] ?? 0) === 1) ? 'selected' : '' ?>>Activo</option>
+                    <option <?= ((int) ($e['is_active'] ?? 0) !== 1) ? 'selected' : '' ?>>Inactivo</option>
+                  </select>
+                </label>
+                <button class="btn btn-primary" type="submit">Actualizar</button>
+              </form>
+            </details>
+          </td>
+        </tr>
+        <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
   </section>
 </div>

@@ -1,5 +1,5 @@
 <section class="card table-card">
-  <h3>Solicitudes del equipo</h3>
+  <div class="card-head"><h3>Solicitudes del equipo</h3><span class="badge">Workflow</span></div>
   <table>
     <thead><tr><th>Empleado</th><th>Tipo</th><th>Fecha</th><th>Estado</th><th>Acción</th></tr></thead>
     <tbody>
@@ -13,7 +13,11 @@
           <form method="post" action="<?= htmlspecialchars(($base_path ?? '') . '/admin/requests/status') ?>" class="inline-form">
             <input type="hidden" name="_csrf" value="<?= htmlspecialchars($csrf) ?>">
             <input type="hidden" name="id" value="<?= (int) $r['id'] ?>">
-            <select name="status"><option>Pendiente</option><option>Aprobada</option><option>Rechazada</option></select>
+            <select name="status">
+              <option <?= $r['status'] === 'Pendiente' ? 'selected' : '' ?>>Pendiente</option>
+              <option <?= $r['status'] === 'Aprobada' ? 'selected' : '' ?>>Aprobada</option>
+              <option <?= $r['status'] === 'Rechazada' ? 'selected' : '' ?>>Rechazada</option>
+            </select>
             <button class="btn" type="submit">Actualizar</button>
           </form>
         </td>
