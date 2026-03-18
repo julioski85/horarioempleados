@@ -13,7 +13,7 @@ final class KioskController
 {
     public function index(): void
     {
-        View::render('kiosk/index', ['title' => 'Kiosco'], 'layouts/blank');
+        View::render('kiosk/index', ['title' => 'Kiosco', 'show_floating_theme' => false], 'layouts/blank');
     }
 
     public function search(): void

@@ -17,7 +17,9 @@
   </script>
 </head>
 <body>
+<?php if (($show_floating_theme ?? true) === true): ?>
 <button type="button" class="theme-toggle theme-toggle-floating" data-theme-toggle aria-label="Cambiar tema">🌙 Tema</button>
+<?php endif; ?>
 <?= $content ?>
 <script>window.APP_BASE_PATH = <?= json_encode($base_path ?? '') ?>;</script>
 <script src="<?= htmlspecialchars(($base_path ?? '') . '/assets/js/app.js') ?>"></script>
