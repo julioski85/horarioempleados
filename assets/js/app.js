@@ -28,8 +28,15 @@
   const pinGrid = document.getElementById('pin-grid');
   if (pinGrid) {
     const pinValue = document.getElementById('pin-value');
+    const pinPreview = document.getElementById('pin-preview');
+    const updatePinPreview = () => {
+      const visiblePin = '*'.repeat(pinValue.value.length);
+      pinPreview.textContent = 'PIN ingresado: ' + (visiblePin || '••••••');
+    };
+
     [...Array(10).keys(), '←'].forEach((n) => {
       const b = document.createElement('button');
+      b.type = 'button';
       b.className = 'pin-key';
       b.textContent = n;
       b.onclick = () => {
@@ -38,9 +45,12 @@
         } else if (pinValue.value.length < 6) {
           pinValue.value += String(n);
         }
+        updatePinPreview();
       };
       pinGrid.appendChild(b);
     });
+
+    updatePinPreview();
   }
 })();
 

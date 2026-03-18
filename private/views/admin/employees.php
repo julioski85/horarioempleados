@@ -1,7 +1,10 @@
 <div class="split-grid">
   <section class="card form-card">
     <div class="card-head">
-      <h3>Nuevo empleado</h3>
+      <div>
+        <h3>Nuevo empleado</h3>
+        <p class="card-subtitle">Alta rápida y segura para nuevos integrantes.</p>
+      </div>
       <span class="badge">Alta</span>
     </div>
     <form method="post" action="<?= htmlspecialchars(($base_path ?? '') . '/admin/employees/save') ?>" class="form-grid">
@@ -17,7 +20,10 @@
 
   <section class="card table-card">
     <div class="card-head">
-      <h3>Gestión de empleados</h3>
+      <div>
+        <h3>Gestión de empleados</h3>
+        <p class="card-subtitle">Listado completo con edición inline.</p>
+      </div>
       <span class="badge"><?= count($employees) ?> registros</span>
     </div>
     <div class="table-wrap">
