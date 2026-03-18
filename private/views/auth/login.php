@@ -1,9 +1,11 @@
 <div class="auth-shell">
   <section class="auth-visual-panel">
-    <p class="auth-kicker">HorarioPro</p>
-    <h1 class="auth-title">Gestiona asistencia con claridad y precisión.</h1>
-    <p class="auth-subtitle">Una experiencia moderna para controlar turnos, equipo y operación diaria desde un solo lugar.</p>
-    <img class="auth-illustration" src="<?= htmlspecialchars(($base_path ?? '') . '/assets/uploads/base/illustration-dashboard.webp') ?>" alt="Ilustración del panel de HorarioPro">
+    <div class="auth-visual-content">
+      <p class="auth-kicker">HorarioPro</p>
+      <h1 class="auth-title">Gestiona asistencia con claridad y precisión.</h1>
+      <p class="auth-subtitle">Una experiencia moderna para controlar turnos, equipo y operación diaria desde un solo lugar.</p>
+      <img class="auth-illustration" src="<?= htmlspecialchars(($base_path ?? '') . '/assets/uploads/base/illustration-dashboard.webp') ?>" alt="Ilustración del panel de HorarioPro">
+    </div>
   </section>
 
   <section class="auth-form-panel">
@@ -30,7 +32,7 @@
           <input id="employee-email" class="auth-input" name="email" type="email" placeholder="ana@gym.local" required>
           <label for="employee-password">Contraseña</label>
           <input id="employee-password" class="auth-input" name="password" type="password" placeholder="••••••••" required>
-          <button class="btn" type="submit">Entrar como empleado</button>
+          <button class="auth-button auth-button-secondary" type="submit">Entrar como empleado</button>
         </form>
       </div>
     </div>
