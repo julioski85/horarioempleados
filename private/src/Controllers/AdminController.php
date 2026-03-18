@@ -84,6 +84,64 @@ final class AdminController
         Response::redirect('/admin/employees');
     }
 
+
+    public function updateEmployee(): void
+    {
+        Auth::requireRole('admin');
+        if (!Csrf::check($_POST['_csrf'] ?? null)) {
+            Response::redirect('/admin/employees');
+        }
+
+        $id = (int) ($_POST['id'] ?? 0);
+        $fullName = trim((string) ($_POST['full_name'] ?? ''));
+        $email = trim((string) ($_POST['email'] ?? ''));
+        $shortId = trim((string) ($_POST['short_id'] ?? ''));
+        $pin = trim((string) ($_POST['pin'] ?? ''));
+        $isActive = ($_POST['status'] ?? 'Activo') === 'Activo' ? 1 : 0;
+
+        if ($id <= 0 || $fullName === '' || $email === '') {
+            Response::redirect('/admin/employees');
+        }
+
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            Response::redirect('/admin/employees');
+        }
+
+        $pdo = DB::pdo();
+
+        $duplicateEmail = $pdo->prepare('SELECT COUNT(*) FROM employees WHERE email=? AND id<>?');
+        $duplicateEmail->execute([$email, $id]);
+        if ((int) $duplicateEmail->fetchColumn() > 0) {
+            Response::redirect('/admin/employees');
+        }
+
+        if ($shortId !== '') {
+            $duplicateShortId = $pdo->prepare('SELECT COUNT(*) FROM employees WHERE short_id=? AND id<>?');
+            $duplicateShortId->execute([$shortId, $id]);
+            if ((int) $duplicateShortId->fetchColumn() > 0) {
+                Response::redirect('/admin/employees');
+            }
+        }
+
+        if ($pin !== '') {
+            $st = $pdo->prepare('UPDATE employees SET short_id=?,full_name=?,email=?,pin_hash=?,password_hash=?,is_active=? WHERE id=?');
+            $st->execute([
+                $shortId !== '' ? $shortId : null,
+                $fullName,
+                $email,
+                password_hash($pin, PASSWORD_DEFAULT),
+                password_hash($pin, PASSWORD_DEFAULT),
+                $isActive,
+                $id,
+            ]);
+        } else {
+            $st = $pdo->prepare('UPDATE employees SET short_id=?,full_name=?,email=?,is_active=? WHERE id=?');
+            $st->execute([$shortId !== '' ? $shortId : null, $fullName, $email, $isActive, $id]);
+        }
+
+        Response::redirect('/admin/employees');
+    }
+
     public function requests(): void
     {
         Auth::requireRole('admin');

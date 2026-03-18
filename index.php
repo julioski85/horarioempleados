@@ -41,9 +41,9 @@ $routes = [
         '/employee/dashboard' => fn () => (new EmployeeController())->dashboard(),
     ],
     'POST' => [
-        '/login/admin' => fn () => (new AuthController())->loginAdmin(),
-        '/login/employee' => fn () => (new AuthController())->loginEmployee(),
+        '/login' => fn () => (new AuthController())->login(),
         '/admin/employees/save' => fn () => (new AdminController())->saveEmployee(),
+        '/admin/employees/update' => fn () => (new AdminController())->updateEmployee(),
         '/admin/requests/status' => fn () => (new AdminController())->updateRequestStatus(),
         '/employee/request' => fn () => (new EmployeeController())->createRequest(),
         '/kiosk/register' => fn () => (new KioskController())->register(),
