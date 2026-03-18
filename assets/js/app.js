@@ -16,8 +16,7 @@
       button.textContent = theme === 'dark' ? '☀️ Modo claro' : '🌙 Modo oscuro';
     });
   };
-  const currentTheme = root.getAttribute('data-theme') || 'light';
-  setTheme(currentTheme);
+  setTheme(root.getAttribute('data-theme') || 'light');
   themeButtons.forEach((button) => {
     button.addEventListener('click', () => {
       const nextTheme = (root.getAttribute('data-theme') || 'light') === 'dark' ? 'light' : 'dark';
@@ -30,8 +29,7 @@
     const pinValue = document.getElementById('pin-value');
     const pinPreview = document.getElementById('pin-preview');
     const updatePinPreview = () => {
-      const visiblePin = '*'.repeat(pinValue.value.length);
-      pinPreview.textContent = 'PIN ingresado: ' + (visiblePin || '••••••');
+      pinPreview.textContent = 'PIN ingresado: ' + ('*'.repeat(pinValue.value.length) || '••••••');
     };
 
     [...Array(10).keys(), '←'].forEach((n) => {
@@ -49,29 +47,158 @@
       };
       pinGrid.appendChild(b);
     });
-
     updatePinPreview();
   }
 })();
 
+let kioskDebounceTimer = null;
+let kioskCameraStream = null;
+let selectedEmployee = null;
+
+function kioskSetFeedback(message, tone) {
+  const feedback = document.getElementById('kiosk-feedback');
+  if (!feedback) return;
+  feedback.className = 'kiosk-feedback ' + (tone || '');
+  feedback.textContent = message;
+}
+
 async function kioskSearch() {
-  const q = document.getElementById('kiosk-search').value;
+  const input = document.getElementById('kiosk-search');
+  const q = (input?.value || '').trim();
+  if (!q) {
+    renderKioskSuggestions([]);
+    kioskSetFeedback('Escribe al menos un nombre o ID.', 'warn');
+    return;
+  }
   const res = await fetch((window.toUrl ? window.toUrl('/kiosk/search') : '/kiosk/search') + '?q=' + encodeURIComponent(q));
   const data = await res.json();
-  if (!data.employee) return alert('No encontrado');
-  document.getElementById('employee-id').value = data.employee.id;
-  document.querySelector('#kiosk-employee strong').textContent = data.employee.full_name;
-  document.querySelector('#kiosk-employee span').textContent = data.employee.status;
-  if (data.employee.photo_path) {
-    document.querySelector('#kiosk-employee img').src = (window.toUrl ? window.toUrl('') : '') + data.employee.photo_path;
+  renderKioskSuggestions(data.employees || []);
+  if (!data.employees || data.employees.length === 0) {
+    kioskSetFeedback('No se encontraron empleados con ese texto.', 'warn');
   }
 }
 
+function renderKioskSuggestions(items) {
+  const box = document.getElementById('kiosk-suggestions');
+  if (!box) return;
+  box.innerHTML = '';
+  if (!items.length) return;
+  items.forEach((employee) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'kiosk-suggestion';
+    button.innerHTML = '<strong>' + escapeHtml(employee.full_name) + '</strong><span>' + escapeHtml(employee.short_id || ('ID ' + employee.id)) + ' · ' + escapeHtml(employee.status) + '</span>';
+    button.addEventListener('click', () => kioskSelectEmployee(employee));
+    box.appendChild(button);
+  });
+}
+
+async function kioskSelectEmployee(employee) {
+  selectedEmployee = employee;
+  document.getElementById('employee-id').value = employee.id;
+  document.querySelector('#kiosk-employee strong').textContent = employee.full_name;
+  document.querySelector('#kiosk-employee span').textContent = employee.status;
+  document.querySelector('#kiosk-employee img').src = (window.toUrl ? window.toUrl('') : '') + (employee.photo_path || '/assets/uploads/base/avatar-base.svg');
+  renderKioskSuggestions([]);
+
+  const res = await fetch((window.toUrl ? window.toUrl('/kiosk/next-action') : '/kiosk/next-action') + '?employee_id=' + encodeURIComponent(employee.id));
+  const data = await res.json();
+  const shiftNode = document.getElementById('kiosk-shift');
+  if (data.shift) {
+    shiftNode.textContent = 'Turno esperado: ' + data.shift.start_time.slice(0, 5) + ' - ' + data.shift.end_time.slice(0, 5) + ' · Próxima marca: ' + data.action;
+  } else {
+    shiftNode.textContent = 'Turno: no disponible';
+  }
+  kioskSetFeedback(data.validation?.ui_message || 'Empleado seleccionado.', data.validation?.allowed ? 'ok' : 'warn');
+}
+
+function kioskBindSearchInput() {
+  const input = document.getElementById('kiosk-search');
+  if (!input) return;
+  input.addEventListener('input', () => {
+    clearTimeout(kioskDebounceTimer);
+    kioskDebounceTimer = setTimeout(() => {
+      kioskSearch().catch(() => kioskSetFeedback('No se pudo buscar empleados.', 'error'));
+    }, 220);
+  });
+}
+
+async function kioskStartCamera() {
+  const video = document.getElementById('selfie-video');
+  if (!video) return;
+  try {
+    if (kioskCameraStream) {
+      video.srcObject = kioskCameraStream;
+      return;
+    }
+    kioskCameraStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'user' }, width: { ideal: 720 }, height: { ideal: 1280 } },
+      audio: false,
+    });
+    video.srcObject = kioskCameraStream;
+    kioskSetFeedback('Cámara activa. Toma la selfie para continuar.', 'ok');
+  } catch (e) {
+    kioskSetFeedback('No se pudo activar la cámara. Verifica permisos en Safari.', 'error');
+  }
+}
+
+function kioskTakeSelfie() {
+  const video = document.getElementById('selfie-video');
+  const preview = document.getElementById('selfie-preview');
+  const hidden = document.getElementById('selfie-data');
+  if (!video || !preview || !hidden || !video.videoWidth) {
+    kioskSetFeedback('Activa la cámara antes de tomar la selfie.', 'warn');
+    return;
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+  hidden.value = dataUrl;
+  preview.src = dataUrl;
+  preview.style.display = 'block';
+  kioskSetFeedback('Selfie capturada correctamente.', 'ok');
+}
+
 async function kioskRegister() {
+  const employeeId = document.getElementById('employee-id').value;
+  const pin = document.getElementById('pin-value').value;
+  const selfieData = document.getElementById('selfie-data').value;
+  if (!employeeId) return kioskSetFeedback('Selecciona un empleado.', 'warn');
+  if (!pin) return kioskSetFeedback('Ingresa el PIN.', 'warn');
+  if (!selfieData) return kioskSetFeedback('La selfie es obligatoria antes de confirmar.', 'warn');
+
   const payload = new URLSearchParams();
-  payload.set('employee_id', document.getElementById('employee-id').value);
-  payload.set('pin', document.getElementById('pin-value').value);
+  payload.set('employee_id', employeeId);
+  payload.set('pin', pin);
+  payload.set('selfie_data', selfieData);
   const res = await fetch(window.toUrl ? window.toUrl('/kiosk/register') : '/kiosk/register', { method: 'POST', body: payload });
   const data = await res.json();
-  alert(data.message || 'Listo');
+  kioskSetFeedback(data.message || 'Listo', data.ok ? 'ok' : 'error');
+  if (data.ok) {
+    document.getElementById('pin-value').value = '';
+    document.getElementById('selfie-data').value = '';
+    document.getElementById('selfie-preview').style.display = 'none';
+    document.getElementById('pin-preview').textContent = 'PIN ingresado: ••••••';
+  }
 }
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  kioskBindSearchInput();
+});
+
+window.kioskSearch = kioskSearch;
+window.kioskRegister = kioskRegister;
+window.kioskStartCamera = kioskStartCamera;
+window.kioskTakeSelfie = kioskTakeSelfie;

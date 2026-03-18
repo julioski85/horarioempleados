@@ -152,13 +152,29 @@ input:focus,select:focus,.auth-input:focus{outline:none;border-color:var(--brand
 .kiosk-head h1{margin:0;font-size:1.7rem}
 .kiosk-head p{margin-top:6px;color:var(--muted)}
 .kiosk-search{display:grid;grid-template-columns:1fr auto;gap:10px}
+.kiosk-suggestions{display:grid;gap:8px;margin-top:10px}
+.kiosk-suggestion{border:1px solid var(--line);background:var(--card-soft);padding:10px 12px;border-radius:12px;display:grid;text-align:left;cursor:pointer}
+.kiosk-suggestion strong{font-size:1rem}
+.kiosk-suggestion span{color:var(--muted);font-size:.85rem}
 .kiosk-employee{margin-top:14px;display:flex;gap:12px;align-items:center;background:var(--card-soft);padding:12px;border-radius:14px;border:1px solid var(--line)}
 .kiosk-employee img{width:64px;height:64px;border-radius:14px;object-fit:cover;background:#dbe7ff}
 .kiosk-employee div{display:grid}
 .kiosk-employee span{color:var(--muted)}
+.kiosk-employee small{color:var(--muted);margin-top:2px}
+.kiosk-feedback{margin:12px 0 0;padding:10px 12px;border:1px dashed var(--line);border-radius:12px;color:var(--muted);font-weight:600}
+.kiosk-feedback.ok{background:var(--success-bg);color:var(--success-ink);border-style:solid}
+.kiosk-feedback.warn{background:var(--warn-bg);color:var(--warn-ink);border-style:solid}
+.kiosk-feedback.error{background:var(--danger-bg);color:var(--danger-ink);border-style:solid}
 .pin-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
 .pin-key{padding:14px;border-radius:14px;border:1px solid var(--line);background:var(--card);font-size:1.2rem;font-weight:700;color:var(--ink);cursor:pointer}
 .pin-preview{margin-top:12px;padding:10px 12px;border:1px dashed var(--line);border-radius:12px;color:var(--muted);font-weight:600}
+.selfie-box{margin-top:14px;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--card-soft);display:grid;gap:10px}
+.selfie-head{display:grid}
+.selfie-head small{color:var(--muted)}
+.selfie-video,.selfie-preview{width:100%;max-height:260px;object-fit:cover;border-radius:12px;background:#0b1220}
+.selfie-preview{display:none}
+.selfie-actions{display:flex;gap:10px;flex-wrap:wrap}
+.selfie-note{color:var(--muted);font-size:.78rem}
 
 @media (max-width:1100px){
   .auth-shell{grid-template-columns:1fr}

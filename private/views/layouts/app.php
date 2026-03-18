@@ -47,6 +47,7 @@ $isActive = static function (string $path) use ($currentPath): bool {
       <a class="nav-link <?= $isActive('/admin/employees') ? 'active' : '' ?>" href="<?= htmlspecialchars(($base_path ?? '') . '/admin/employees') ?>">Empleados</a>
       <a class="nav-link <?= $isActive('/admin/requests') ? 'active' : '' ?>" href="<?= htmlspecialchars(($base_path ?? '') . '/admin/requests') ?>">Solicitudes</a>
       <a class="nav-link <?= $isActive('/admin/reports') ? 'active' : '' ?>" href="<?= htmlspecialchars(($base_path ?? '') . '/admin/reports') ?>">Reportes</a>
+      <a class="nav-link <?= $isActive('/admin/attendance') ? 'active' : '' ?>" href="<?= htmlspecialchars(($base_path ?? '') . '/admin/attendance') ?>">Reglas asistencia</a>
       <?php endif; ?>
       <?php if ($role === 'employee'): ?>
       <a class="nav-link <?= $isActive('/employee/dashboard') ? 'active' : '' ?>" href="<?= htmlspecialchars(($base_path ?? '') . '/employee/dashboard') ?>">Mi panel</a>

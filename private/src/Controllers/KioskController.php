@@ -7,6 +7,8 @@ namespace App\Controllers;
 use App\Core\DB;
 use App\Core\Response;
 use App\Core\View;
+use App\Services\AttendanceService;
+use DateTimeImmutable;
 use PDO;
 
 final class KioskController
@@ -19,35 +21,107 @@ final class KioskController
     public function search(): void
     {
         $term = trim((string) ($_GET['q'] ?? ''));
-        $pdo = DB::pdo();
-        $st = $pdo->prepare('SELECT id,short_id,full_name,base_photo_path,is_active FROM employees WHERE full_name LIKE ? OR short_id = ? OR id = ? LIMIT 1');
-        $st->execute(["%{$term}%", $term, (int) $term]);
-        $employee = $st->fetch(PDO::FETCH_ASSOC) ?: null;
+        if (mb_strlen($term) < 1) {
+            Response::json(['employees' => []]);
+        }
 
-        if ($employee) {
+        $pdo = DB::pdo();
+        $like = '%' . mb_strtolower($term) . '%';
+        $st = $pdo->prepare('
+            SELECT id, short_id, full_name, base_photo_path, is_active
+            FROM employees
+            WHERE LOWER(full_name) LIKE ?
+               OR LOWER(short_id) LIKE ?
+               OR CAST(id AS CHAR) = ?
+            ORDER BY full_name ASC
+            LIMIT 8
+        ');
+        $st->execute([$like, $like, $term]);
+        $employees = $st->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($employees as &$employee) {
             $employee['status'] = ((int) $employee['is_active'] === 1) ? 'Activo' : 'Inactivo';
             $employee['photo_path'] = $employee['base_photo_path'] ?: '/assets/uploads/base/avatar-base.svg';
         }
+        unset($employee);
 
-        Response::json(['employee' => $employee]);
+        Response::json(['employees' => $employees]);
     }
 
     public function nextAction(): void
     {
         $employeeId = (int) ($_GET['employee_id'] ?? 0);
         $pdo = DB::pdo();
+        AttendanceService::ensureSchema($pdo);
+
+        $settings = AttendanceService::loadSettings($pdo);
+        $now = new DateTimeImmutable();
+        $weeklySchedule = AttendanceService::loadEmployeeWeeklySchedule($pdo, $employeeId);
+        $shift = AttendanceService::resolveCurrentShift($now, $weeklySchedule);
+
+        $employeeSt = $pdo->prepare('SELECT id, full_name, base_photo_path, is_active FROM employees WHERE id = ? LIMIT 1');
+        $employeeSt->execute([$employeeId]);
+        $employee = $employeeSt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$employee) {
+            Response::json(['ok' => false, 'message' => 'Empleado no encontrado']);
+        }
+
+        if ((int) $employee['is_active'] !== 1) {
+            Response::json(['ok' => false, 'message' => 'El empleado está inactivo']);
+        }
+
         $st = $pdo->prepare('SELECT record_type FROM attendance_records WHERE employee_id=? AND is_void=0 ORDER BY recorded_at DESC LIMIT 1');
         $st->execute([$employeeId]);
         $lastType = (string) $st->fetchColumn();
+        $action = $lastType === 'entrada' ? 'salida' : 'entrada';
 
-        Response::json(['action' => $lastType === 'entrada' ? 'salida' : 'entrada']);
+        if (!$shift) {
+            Response::json([
+                'ok' => true,
+                'action' => $action,
+                'employee' => [
+                    'id' => (int) $employee['id'],
+                    'full_name' => $employee['full_name'],
+                    'photo_path' => $employee['base_photo_path'] ?: '/assets/uploads/base/avatar-base.svg',
+                ],
+                'shift' => null,
+                'validation' => [
+                    'allowed' => false,
+                    'status' => 'sin_turno',
+                    'ui_message' => 'No hay turno aplicable para este empleado en este momento.',
+                ],
+            ]);
+        }
+
+        $validation = $action === 'entrada'
+            ? AttendanceService::classifyEntry($now, $shift, $settings)
+            : AttendanceService::classifyExit($now, $shift, $settings, null);
+
+        Response::json([
+            'ok' => true,
+            'action' => $action,
+            'employee' => [
+                'id' => (int) $employee['id'],
+                'full_name' => $employee['full_name'],
+                'photo_path' => $employee['base_photo_path'] ?: '/assets/uploads/base/avatar-base.svg',
+            ],
+            'shift' => [
+                'id' => (int) $shift['id'],
+                'day_of_week' => (int) $shift['day_of_week'],
+                'start_time' => $shift['start_time'],
+                'end_time' => $shift['end_time'],
+            ],
+            'validation' => $validation,
+        ]);
     }
 
     public function register(): void
     {
         $employeeId = (int) ($_POST['employee_id'] ?? 0);
         $pin = (string) ($_POST['pin'] ?? '');
+        $selfieData = trim((string) ($_POST['selfie_data'] ?? ''));
         $pdo = DB::pdo();
+        AttendanceService::ensureSchema($pdo);
 
         $st = $pdo->prepare('SELECT id,pin_hash,is_active FROM employees WHERE id=?');
         $st->execute([$employeeId]);
@@ -56,14 +130,94 @@ final class KioskController
         if (!$employee || (int) $employee['is_active'] !== 1 || !password_verify($pin, (string) $employee['pin_hash'])) {
             Response::json(['ok' => false, 'message' => 'PIN incorrecto']);
         }
+        if ($selfieData === '') {
+            Response::json(['ok' => false, 'message' => 'La selfie es obligatoria']);
+        }
 
         $last = $pdo->prepare('SELECT record_type FROM attendance_records WHERE employee_id=? AND is_void=0 ORDER BY recorded_at DESC LIMIT 1');
         $last->execute([$employeeId]);
         $recordType = ((string) $last->fetchColumn()) === 'entrada' ? 'salida' : 'entrada';
 
-        $ins = $pdo->prepare('INSERT INTO attendance_records(employee_id,shift_id,record_type,status,origin,device_name,selfie_path,recorded_at,is_void,void_reason) VALUES(?,?,?,?,?,?,?,?,?,?)');
-        $ins->execute([$employeeId, null, $recordType, 'confirmado', 'kiosk', 'web-kiosk', null, date('Y-m-d H:i:s'), 0, null]);
+        $settings = AttendanceService::loadSettings($pdo);
+        $now = new DateTimeImmutable();
+        $weeklySchedule = AttendanceService::loadEmployeeWeeklySchedule($pdo, $employeeId);
+        $shift = AttendanceService::resolveCurrentShift($now, $weeklySchedule);
+        if (!$shift) {
+            Response::json(['ok' => false, 'message' => 'No hay turno aplicable en este momento']);
+        }
 
-        Response::json(['ok' => true, 'message' => 'Asistencia registrada']);
+        $validation = $recordType === 'entrada'
+            ? AttendanceService::classifyEntry($now, $shift, $settings)
+            : AttendanceService::classifyExit($now, $shift, $settings, $this->lastEntryAt($pdo, $employeeId));
+
+        if (($validation['allowed'] ?? false) !== true) {
+            Response::json(['ok' => false, 'message' => (string) ($validation['ui_message'] ?? 'Marca fuera de rango')]);
+        }
+
+        $selfiePath = $this->storeSelfie($selfieData, $employeeId);
+        if ($selfiePath === null) {
+            Response::json(['ok' => false, 'message' => 'No se pudo guardar la selfie']);
+        }
+
+        $ins = $pdo->prepare('INSERT INTO attendance_records(employee_id,shift_id,record_type,status,origin,device_name,selfie_path,recorded_at,is_void,void_reason) VALUES(?,?,?,?,?,?,?,?,?,?)');
+        $ins->execute([
+            $employeeId,
+            (int) $shift['id'],
+            $recordType,
+            (string) ($validation['status'] ?? 'confirmado'),
+            'kiosk',
+            'web-kiosk',
+            $selfiePath,
+            $now->format('Y-m-d H:i:s'),
+            0,
+            null,
+        ]);
+
+        Response::json(['ok' => true, 'message' => (string) ($validation['ui_message'] ?? 'Asistencia registrada')]);
+    }
+
+    private function storeSelfie(string $selfieData, int $employeeId): ?string
+    {
+        if (!preg_match('#^data:image/(jpeg|jpg|png|webp);base64,#i', $selfieData, $matches)) {
+            return null;
+        }
+
+        $format = strtolower($matches[1]);
+        $extension = $format === 'jpeg' ? 'jpg' : $format;
+        $binary = base64_decode(substr($selfieData, strpos($selfieData, ',') + 1), true);
+        if ($binary === false || strlen($binary) < 512) {
+            return null;
+        }
+
+        $relativeDir = '/assets/uploads/selfies/' . date('Y/m');
+        $targetDir = dirname(__DIR__, 3) . $relativeDir;
+        if (!is_dir($targetDir) && !mkdir($targetDir, 0775, true) && !is_dir($targetDir)) {
+            return null;
+        }
+
+        $name = sprintf('kiosk-e%s-%s.%s', $employeeId, bin2hex(random_bytes(6)), $extension);
+        $fullPath = $targetDir . '/' . $name;
+        if (file_put_contents($fullPath, $binary) === false) {
+            return null;
+        }
+
+        return $relativeDir . '/' . $name;
+    }
+
+    private function lastEntryAt(PDO $pdo, int $employeeId): ?DateTimeImmutable
+    {
+        $st = $pdo->prepare(
+            "SELECT recorded_at
+            FROM attendance_records
+            WHERE employee_id = ? AND is_void = 0 AND record_type = 'entrada'
+            ORDER BY recorded_at DESC
+            LIMIT 1"
+        );
+        $st->execute([$employeeId]);
+        $value = $st->fetchColumn();
+        if (!$value) {
+            return null;
+        }
+        return new DateTimeImmutable((string) $value);
     }
 }

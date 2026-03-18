@@ -9,6 +9,7 @@ use App\Core\Csrf;
 use App\Core\DB;
 use App\Core\Response;
 use App\Core\View;
+use App\Services\AttendanceService;
 use PDO;
 
 final class AdminController
@@ -45,8 +46,115 @@ final class AdminController
     {
         Auth::requireRole('admin');
         $pdo = DB::pdo();
+        AttendanceService::ensureSchema($pdo);
         $employees = $pdo->query('SELECT * FROM employees ORDER BY id DESC')->fetchAll(PDO::FETCH_ASSOC);
-        View::render('admin/employees', ['employees' => $employees, 'csrf' => Csrf::token(), 'title' => 'Empleados']);
+        $shifts = $pdo->query(
+            'SELECT employee_id, day_of_week, start_time, end_time
+            FROM employee_schedule_shifts
+            WHERE is_active = 1
+            ORDER BY employee_id ASC, day_of_week ASC, start_time ASC'
+        )->fetchAll(PDO::FETCH_ASSOC);
+
+        $scheduleByEmployee = [];
+        foreach ($shifts as $shift) {
+            $employeeId = (int) $shift['employee_id'];
+            $day = (int) $shift['day_of_week'];
+            $scheduleByEmployee[$employeeId] ??= [];
+            $scheduleByEmployee[$employeeId][$day] ??= [];
+            $scheduleByEmployee[$employeeId][$day][] = $shift['start_time'] . '-' . $shift['end_time'];
+        }
+        View::render('admin/employees', [
+            'employees' => $employees,
+            'schedule_by_employee' => $scheduleByEmployee,
+            'csrf' => Csrf::token(),
+            'title' => 'Empleados',
+        ]);
+    }
+
+    public function attendanceSettings(): void
+    {
+        Auth::requireRole('admin');
+        $pdo = DB::pdo();
+        $settings = AttendanceService::loadSettings($pdo);
+        View::render('admin/attendance', [
+            'settings' => $settings,
+            'csrf' => Csrf::token(),
+            'title' => 'Reglas de asistencia',
+        ]);
+    }
+
+    public function saveAttendanceSettings(): void
+    {
+        Auth::requireRole('admin');
+        if (!Csrf::check($_POST['_csrf'] ?? null)) {
+            Response::redirect('/admin/attendance');
+        }
+        $pdo = DB::pdo();
+        AttendanceService::ensureSchema($pdo);
+        $allowedKeys = array_keys(AttendanceService::DEFAULT_SETTINGS);
+        $upsert = $pdo->prepare(
+            'INSERT INTO attendance_settings(setting_key, setting_value, updated_at) VALUES(?,?,NOW())
+            ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_at = NOW()'
+        );
+        foreach ($allowedKeys as $key) {
+            $value = max(0, (int) ($_POST[$key] ?? AttendanceService::DEFAULT_SETTINGS[$key]));
+            $upsert->execute([$key, (string) $value]);
+        }
+        Response::redirect('/admin/attendance');
+    }
+
+    public function saveEmployeeSchedule(): void
+    {
+        Auth::requireRole('admin');
+        if (!Csrf::check($_POST['_csrf'] ?? null)) {
+            Response::redirect('/admin/employees');
+        }
+
+        $employeeId = (int) ($_POST['employee_id'] ?? 0);
+        if ($employeeId <= 0) {
+            Response::redirect('/admin/employees');
+        }
+
+        $pdo = DB::pdo();
+        AttendanceService::ensureSchema($pdo);
+
+        $days = [1, 2, 3, 4, 5, 6, 7];
+        $entries = [];
+        foreach ($days as $day) {
+            $raw = trim((string) ($_POST['day_' . $day] ?? ''));
+            if ($raw === '') {
+                continue;
+            }
+
+            $ranges = array_filter(array_map('trim', explode(',', $raw)), static fn(string $v): bool => $v !== '');
+            foreach ($ranges as $range) {
+                if (!preg_match('/^([01]?\d|2[0-3]):([0-5]\d)\s*-\s*([01]?\d|2[0-3]):([0-5]\d)$/', $range, $m)) {
+                    continue;
+                }
+                $start = sprintf('%02d:%02d:00', (int) $m[1], (int) $m[2]);
+                $end = sprintf('%02d:%02d:00', (int) $m[3], (int) $m[4]);
+                if ($start >= $end) {
+                    continue;
+                }
+                $entries[] = [$employeeId, $day, $start, $end];
+            }
+        }
+
+        $pdo->beginTransaction();
+        $disable = $pdo->prepare('UPDATE employee_schedule_shifts SET is_active = 0 WHERE employee_id = ?');
+        $disable->execute([$employeeId]);
+        if ($entries !== []) {
+            $insert = $pdo->prepare(
+                'INSERT INTO employee_schedule_shifts(employee_id, day_of_week, start_time, end_time, is_active, created_at, updated_at)
+                VALUES(?,?,?,?,1,NOW(),NOW())'
+            );
+            foreach ($entries as $entry) {
+                $insert->execute($entry);
+            }
+        }
+        $pdo->commit();
+
+        Response::redirect('/admin/employees');
     }
 
     public function saveEmployee(): void
