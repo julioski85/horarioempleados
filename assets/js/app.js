@@ -54,6 +54,7 @@
 let kioskDebounceTimer = null;
 let kioskCameraStream = null;
 let selectedEmployee = null;
+let kioskVideoNeedsPortraitRotation = false;
 
 function kioskSetFeedback(message, tone) {
   const feedback = document.getElementById('kiosk-feedback');
@@ -136,10 +137,20 @@ async function kioskStartCamera() {
       audio: false,
     });
     video.srcObject = kioskCameraStream;
+    video.onloadedmetadata = () => {
+      kioskApplySelfieVideoOrientation(video);
+    };
     kioskSetFeedback('Cámara activa. Toma la selfie para continuar.', 'ok');
   } catch (e) {
     kioskSetFeedback('No se pudo activar la cámara. Verifica permisos en Safari.', 'error');
   }
+}
+
+function kioskApplySelfieVideoOrientation(video) {
+  if (!video) return;
+  const naturalLandscape = video.videoWidth > video.videoHeight;
+  kioskVideoNeedsPortraitRotation = naturalLandscape;
+  video.classList.toggle('selfie-video-portrait-rotated', naturalLandscape);
 }
 
 function kioskTakeSelfie() {
@@ -150,11 +161,54 @@ function kioskTakeSelfie() {
     kioskSetFeedback('Activa la cámara antes de tomar la selfie.', 'warn');
     return;
   }
+  kioskApplySelfieVideoOrientation(video);
+  const sourceWidth = video.videoWidth;
+  const sourceHeight = video.videoHeight;
+
   const canvas = document.createElement('canvas');
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
   const ctx = canvas.getContext('2d');
-  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  if (!ctx) {
+    kioskSetFeedback('No se pudo procesar la selfie.', 'error');
+    return;
+  }
+
+  if (kioskVideoNeedsPortraitRotation) {
+    const rotatedWidth = sourceHeight;
+    const rotatedHeight = sourceWidth;
+    const targetRatio = 3 / 4;
+    let drawWidth = rotatedWidth;
+    let drawHeight = Math.round(rotatedWidth / targetRatio);
+    if (drawHeight > rotatedHeight) {
+      drawHeight = rotatedHeight;
+      drawWidth = Math.round(rotatedHeight * targetRatio);
+    }
+
+    canvas.width = drawWidth;
+    canvas.height = drawHeight;
+
+    const cropX = Math.floor((rotatedWidth - drawWidth) / 2);
+    const cropY = Math.floor((rotatedHeight - drawHeight) / 2);
+
+    ctx.save();
+    ctx.translate(0, sourceWidth);
+    ctx.rotate(-Math.PI / 2);
+    ctx.drawImage(video, cropX, cropY, drawWidth, drawHeight, 0, 0, drawWidth, drawHeight);
+    ctx.restore();
+  } else {
+    const targetRatio = 3 / 4;
+    let drawWidth = sourceWidth;
+    let drawHeight = Math.round(sourceWidth / targetRatio);
+    if (drawHeight > sourceHeight) {
+      drawHeight = sourceHeight;
+      drawWidth = Math.round(sourceHeight * targetRatio);
+    }
+    canvas.width = drawWidth;
+    canvas.height = drawHeight;
+    const cropX = Math.floor((sourceWidth - drawWidth) / 2);
+    const cropY = Math.floor((sourceHeight - drawHeight) / 2);
+    ctx.drawImage(video, cropX, cropY, drawWidth, drawHeight, 0, 0, drawWidth, drawHeight);
+  }
+
   const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
   hidden.value = dataUrl;
   preview.src = dataUrl;

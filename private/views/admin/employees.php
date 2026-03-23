@@ -17,6 +17,27 @@
       <label>Foto del empleado
         <input type="file" name="photo" accept="image/*" capture="user" required>
       </label>
+      <?php $days = [1 => 'Lunes', 2 => 'Martes', 3 => 'Miércoles', 4 => 'Jueves', 5 => 'Viernes', 6 => 'Sábado', 7 => 'Domingo']; ?>
+      <section class="schedule-block">
+        <h4>Horario por día</h4>
+        <small>Define entrada y salida por día. Opcional: agrega turnos extra separados por coma (08:00-12:00,13:00-17:00).</small>
+        <div class="schedule-grid">
+          <?php foreach ($days as $dayIndex => $dayLabel): ?>
+          <div class="schedule-row">
+            <strong><?= $dayLabel ?></strong>
+            <label>Entrada
+              <input type="time" name="day_<?= $dayIndex ?>_start">
+            </label>
+            <label>Salida
+              <input type="time" name="day_<?= $dayIndex ?>_end">
+            </label>
+            <label style="grid-column:1/-1">Turnos extra (opcional)
+              <input name="day_<?= $dayIndex ?>" placeholder="13:00-17:00">
+            </label>
+          </div>
+          <?php endforeach; ?>
+        </div>
+      </section>
       <button class="btn btn-primary" type="submit">Guardar empleado</button>
     </form>
   </section>
@@ -31,7 +52,7 @@
     </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>ID corto</th><th>Empleado</th><th>Email</th><th>Horario</th><th>Estatus</th><th>Edición</th></tr></thead>
+        <thead><tr><th>ID corto</th><th>Empleado</th><th>Email</th><th>Horario actual</th><th>Estatus</th><th>Edición</th></tr></thead>
         <tbody>
         <?php foreach ($employees as $e): ?>
         <?php $employeeSchedule = $schedule_by_employee[(int) $e['id']] ?? []; ?>
@@ -40,20 +61,15 @@
           <td><?= htmlspecialchars($e['full_name']) ?></td>
           <td><?= htmlspecialchars($e['email']) ?></td>
           <td>
-            <details class="edit-disclosure">
-              <summary class="btn">Configurar</summary>
-              <form method="post" action="<?= htmlspecialchars(($base_path ?? '') . '/admin/employees/schedule') ?>" class="form-grid compact-form">
-                <input type="hidden" name="_csrf" value="<?= htmlspecialchars($csrf) ?>">
-                <input type="hidden" name="employee_id" value="<?= (int) $e['id'] ?>">
-                <?php $days = [1 => 'Lunes', 2 => 'Martes', 3 => 'Miércoles', 4 => 'Jueves', 5 => 'Viernes', 6 => 'Sábado', 7 => 'Domingo']; ?>
-                <?php foreach ($days as $dayIndex => $dayLabel): ?>
-                <label><?= $dayLabel ?> (ej: 08:00-12:00,13:00-17:00)
-                  <input name="day_<?= $dayIndex ?>" value="<?= htmlspecialchars(implode(',', $employeeSchedule[$dayIndex] ?? [])) ?>" placeholder="Sin turno">
-                </label>
-                <?php endforeach; ?>
-                <button class="btn btn-primary" type="submit">Guardar horario</button>
-              </form>
-            </details>
+            <?php if ($employeeSchedule === []): ?>
+              <span class="badge warn">Sin horario</span>
+            <?php else: ?>
+              <?php foreach ($days as $dayIndex => $dayLabel): ?>
+                <?php if (!empty($employeeSchedule[$dayIndex])): ?>
+                  <div><strong><?= $dayLabel ?>:</strong> <?= htmlspecialchars(implode(', ', $employeeSchedule[$dayIndex])) ?></div>
+                <?php endif; ?>
+              <?php endforeach; ?>
+            <?php endif; ?>
           </td>
           <td><span class="badge <?= ((int) ($e['is_active'] ?? 0) === 1) ? 'ok' : 'warn' ?>"><?= ((int) ($e['is_active'] ?? 0) === 1) ? 'Activo' : 'Inactivo' ?></span></td>
           <td>
@@ -72,6 +88,43 @@
                     <option <?= ((int) ($e['is_active'] ?? 0) !== 1) ? 'selected' : '' ?>>Inactivo</option>
                   </select>
                 </label>
+                <section class="schedule-block">
+                  <h4>Horario por día</h4>
+                  <small>Puedes ajustar entrada/salida por día sin salir del formulario.</small>
+                  <div class="schedule-grid">
+                    <?php foreach ($days as $dayIndex => $dayLabel): ?>
+                      <?php
+                        $dayShifts = $employeeSchedule[$dayIndex] ?? [];
+                        $firstShift = $dayShifts[0] ?? '';
+                        $startValue = '';
+                        $endValue = '';
+                        if (preg_match('/^([0-2]\d:[0-5]\d):[0-5]\d-([0-2]\d:[0-5]\d):[0-5]\d$/', $firstShift, $m)) {
+                            $startValue = $m[1];
+                            $endValue = $m[2];
+                        } elseif (preg_match('/^([0-2]\d:[0-5]\d)-([0-2]\d:[0-5]\d)$/', $firstShift, $m)) {
+                            $startValue = $m[1];
+                            $endValue = $m[2];
+                        }
+                        $extraShifts = $dayShifts;
+                        if ($extraShifts !== []) {
+                            array_shift($extraShifts);
+                        }
+                      ?>
+                    <div class="schedule-row">
+                      <strong><?= $dayLabel ?></strong>
+                      <label>Entrada
+                        <input type="time" name="day_<?= $dayIndex ?>_start" value="<?= htmlspecialchars($startValue) ?>">
+                      </label>
+                      <label>Salida
+                        <input type="time" name="day_<?= $dayIndex ?>_end" value="<?= htmlspecialchars($endValue) ?>">
+                      </label>
+                      <label style="grid-column:1/-1">Turnos extra (opcional)
+                        <input name="day_<?= $dayIndex ?>" value="<?= htmlspecialchars(implode(',', $extraShifts)) ?>" placeholder="13:00-17:00">
+                      </label>
+                    </div>
+                    <?php endforeach; ?>
+                  </div>
+                </section>
                 <button class="btn btn-primary" type="submit">Actualizar</button>
               </form>
             </details>
