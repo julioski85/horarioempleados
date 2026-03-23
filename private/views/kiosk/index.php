@@ -34,7 +34,7 @@
       </div>
       <small class="selfie-note">Nota iPad/Safari: se usa la cámara en vivo (getUserMedia + cámara frontal). Safari no permite bloquear la galería al 100% en todos los escenarios.</small>
     </div>
-    <button class="btn btn-cta" onclick="kioskRegister()">Confirmar asistencia</button>
+    <button type="button" class="btn btn-cta" onclick="kioskRegister()">Confirmar asistencia</button>
     <input type="hidden" id="employee-id">
     <input type="hidden" id="pin-value">
     <input type="hidden" id="selfie-data">
