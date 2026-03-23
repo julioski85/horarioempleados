@@ -118,41 +118,8 @@ final class AdminController
         $pdo = DB::pdo();
         AttendanceService::ensureSchema($pdo);
 
-        $days = [1, 2, 3, 4, 5, 6, 7];
-        $entries = [];
-        foreach ($days as $day) {
-            $raw = trim((string) ($_POST['day_' . $day] ?? ''));
-            if ($raw === '') {
-                continue;
-            }
-
-            $ranges = array_filter(array_map('trim', explode(',', $raw)), static fn(string $v): bool => $v !== '');
-            foreach ($ranges as $range) {
-                if (!preg_match('/^([01]?\d|2[0-3]):([0-5]\d)\s*-\s*([01]?\d|2[0-3]):([0-5]\d)$/', $range, $m)) {
-                    continue;
-                }
-                $start = sprintf('%02d:%02d:00', (int) $m[1], (int) $m[2]);
-                $end = sprintf('%02d:%02d:00', (int) $m[3], (int) $m[4]);
-                if ($start >= $end) {
-                    continue;
-                }
-                $entries[] = [$employeeId, $day, $start, $end];
-            }
-        }
-
-        $pdo->beginTransaction();
-        $disable = $pdo->prepare('UPDATE employee_schedule_shifts SET is_active = 0 WHERE employee_id = ?');
-        $disable->execute([$employeeId]);
-        if ($entries !== []) {
-            $insert = $pdo->prepare(
-                'INSERT INTO employee_schedule_shifts(employee_id, day_of_week, start_time, end_time, is_active, created_at, updated_at)
-                VALUES(?,?,?,?,1,NOW(),NOW())'
-            );
-            foreach ($entries as $entry) {
-                $insert->execute($entry);
-            }
-        }
-        $pdo->commit();
+        $entries = $this->collectScheduleEntries($_POST, $employeeId);
+        $this->saveEmployeeScheduleEntries($pdo, $employeeId, $entries);
 
         Response::redirect('/admin/employees');
     }
@@ -191,6 +158,10 @@ final class AdminController
             $photoPath,
             $isActive,
         ]);
+        $employeeId = (int) $pdo->lastInsertId();
+        AttendanceService::ensureSchema($pdo);
+        $entries = $this->collectScheduleEntries($_POST, $employeeId);
+        $this->saveEmployeeScheduleEntries($pdo, $employeeId, $entries);
         Response::redirect('/admin/employees');
     }
 
@@ -249,7 +220,86 @@ final class AdminController
             $st->execute([$shortId !== '' ? $shortId : null, $fullName, $email, $isActive, $id]);
         }
 
+        AttendanceService::ensureSchema($pdo);
+        $entries = $this->collectScheduleEntries($_POST, $id);
+        $this->saveEmployeeScheduleEntries($pdo, $id, $entries);
+
         Response::redirect('/admin/employees');
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return array<int, array{0:int,1:int,2:string,3:string}>
+     */
+    private function collectScheduleEntries(array $payload, int $employeeId): array
+    {
+        $days = [1, 2, 3, 4, 5, 6, 7];
+        $entries = [];
+        foreach ($days as $day) {
+            $startInput = trim((string) ($payload['day_' . $day . '_start'] ?? ''));
+            $endInput = trim((string) ($payload['day_' . $day . '_end'] ?? ''));
+            if ($startInput !== '' || $endInput !== '') {
+                if (
+                    preg_match('/^([01]?\d|2[0-3]):([0-5]\d)$/', $startInput, $startMatch)
+                    && preg_match('/^([01]?\d|2[0-3]):([0-5]\d)$/', $endInput, $endMatch)
+                ) {
+                    $start = sprintf('%02d:%02d:00', (int) $startMatch[1], (int) $startMatch[2]);
+                    $end = sprintf('%02d:%02d:00', (int) $endMatch[1], (int) $endMatch[2]);
+                    if ($start < $end) {
+                        $entries[] = [$employeeId, $day, $start, $end];
+                    }
+                }
+            }
+
+            $raw = trim((string) ($payload['day_' . $day] ?? ''));
+            if ($raw === '') {
+                continue;
+            }
+
+            $ranges = array_filter(array_map('trim', explode(',', $raw)), static fn(string $v): bool => $v !== '');
+            foreach ($ranges as $range) {
+                if (!preg_match('/^([01]?\d|2[0-3]):([0-5]\d)\s*-\s*([01]?\d|2[0-3]):([0-5]\d)$/', $range, $m)) {
+                    continue;
+                }
+                $start = sprintf('%02d:%02d:00', (int) $m[1], (int) $m[2]);
+                $end = sprintf('%02d:%02d:00', (int) $m[3], (int) $m[4]);
+                if ($start >= $end) {
+                    continue;
+                }
+                $duplicate = false;
+                foreach ($entries as $entry) {
+                    if ($entry[1] === $day && $entry[2] === $start && $entry[3] === $end) {
+                        $duplicate = true;
+                        break;
+                    }
+                }
+                if (!$duplicate) {
+                    $entries[] = [$employeeId, $day, $start, $end];
+                }
+            }
+        }
+
+        return $entries;
+    }
+
+    /**
+     * @param array<int, array{0:int,1:int,2:string,3:string}> $entries
+     */
+    private function saveEmployeeScheduleEntries(PDO $pdo, int $employeeId, array $entries): void
+    {
+        $pdo->beginTransaction();
+        $disable = $pdo->prepare('UPDATE employee_schedule_shifts SET is_active = 0 WHERE employee_id = ?');
+        $disable->execute([$employeeId]);
+        if ($entries !== []) {
+            $insert = $pdo->prepare(
+                'INSERT INTO employee_schedule_shifts(employee_id, day_of_week, start_time, end_time, is_active, created_at, updated_at)
+                VALUES(?,?,?,?,1,NOW(),NOW())'
+            );
+            foreach ($entries as $entry) {
+                $insert->execute($entry);
+            }
+        }
+        $pdo->commit();
     }
 
     public function requests(): void
