@@ -217,25 +217,41 @@ function kioskTakeSelfie() {
 }
 
 async function kioskRegister() {
-  const employeeId = document.getElementById('employee-id').value;
-  const pin = document.getElementById('pin-value').value;
-  const selfieData = document.getElementById('selfie-data').value;
-  if (!employeeId) return kioskSetFeedback('Selecciona un empleado.', 'warn');
-  if (!pin) return kioskSetFeedback('Ingresa el PIN.', 'warn');
-  if (!selfieData) return kioskSetFeedback('La selfie es obligatoria antes de confirmar.', 'warn');
+  try {
+    const employeeId = document.getElementById('employee-id').value;
+    const pin = document.getElementById('pin-value').value;
+    const selfieData = document.getElementById('selfie-data').value;
+    if (!employeeId) return kioskSetFeedback('Selecciona un empleado.', 'warn');
+    if (!pin) return kioskSetFeedback('Ingresa el PIN.', 'warn');
+    if (!selfieData) return kioskSetFeedback('La selfie es obligatoria antes de confirmar.', 'warn');
 
-  const payload = new URLSearchParams();
-  payload.set('employee_id', employeeId);
-  payload.set('pin', pin);
-  payload.set('selfie_data', selfieData);
-  const res = await fetch(window.toUrl ? window.toUrl('/kiosk/register') : '/kiosk/register', { method: 'POST', body: payload });
-  const data = await res.json();
-  kioskSetFeedback(data.message || 'Listo', data.ok ? 'ok' : 'error');
-  if (data.ok) {
-    document.getElementById('pin-value').value = '';
-    document.getElementById('selfie-data').value = '';
-    document.getElementById('selfie-preview').style.display = 'none';
-    document.getElementById('pin-preview').textContent = 'PIN ingresado: ••••••';
+    kioskSetFeedback('Procesando registro...', 'warn');
+
+    const payload = new URLSearchParams();
+    payload.set('employee_id', employeeId);
+    payload.set('pin', pin);
+    payload.set('selfie_data', selfieData);
+
+    const res = await fetch(window.toUrl ? window.toUrl('/kiosk/register') : '/kiosk/register', {
+      method: 'POST',
+      body: payload,
+    });
+
+    const contentType = (res.headers.get('content-type') || '').toLowerCase();
+    if (!contentType.includes('application/json')) {
+      throw new Error('Respuesta inesperada del servidor');
+    }
+
+    const data = await res.json();
+    kioskSetFeedback(data.message || 'Listo', data.ok ? 'ok' : 'error');
+    if (data.ok) {
+      document.getElementById('pin-value').value = '';
+      document.getElementById('selfie-data').value = '';
+      document.getElementById('selfie-preview').style.display = 'none';
+      document.getElementById('pin-preview').textContent = 'PIN ingresado: ••••••';
+    }
+  } catch (error) {
+    kioskSetFeedback('No se pudo confirmar la asistencia. Revisa conexión e inténtalo de nuevo.', 'error');
   }
 }
 
