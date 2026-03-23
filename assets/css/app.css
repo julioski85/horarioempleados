@@ -157,6 +157,8 @@ input:focus,select:focus,.auth-input:focus{outline:none;border-color:var(--brand
 .kiosk-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:18px}
 .kiosk-head h1{margin:0;font-size:1.7rem}
 .kiosk-head p{margin-top:6px;color:var(--muted)}
+.kiosk-layout{display:grid;gap:14px}
+.kiosk-column{display:grid;align-content:start}
 .kiosk-search{display:grid;grid-template-columns:1fr auto;gap:10px}
 .kiosk-suggestions{display:grid;gap:8px;margin-top:10px}
 .kiosk-suggestion{border:1px solid var(--line);background:var(--card-soft);padding:10px 12px;border-radius:12px;display:grid;text-align:left;cursor:pointer}
@@ -183,6 +185,30 @@ input:focus,select:focus,.auth-input:focus{outline:none;border-color:var(--brand
 .selfie-preview{display:none}
 .selfie-actions{display:flex;gap:10px;flex-wrap:wrap}
 .selfie-note{color:var(--muted);font-size:.78rem}
+.kiosk-submit{margin-top:12px}
+
+@media (min-width:900px) and (max-width:1280px) and (orientation:landscape){
+  .kiosk-shell{height:100dvh;min-height:100dvh;overflow:hidden;padding:10px}
+  .kiosk-card{width:min(1120px,100%);height:calc(100dvh - 20px);padding:16px;display:grid;grid-template-rows:auto minmax(0,1fr);gap:10px}
+  .kiosk-head{margin-bottom:0}
+  .kiosk-head h1{font-size:1.35rem}
+  .kiosk-head p{margin:2px 0 0;font-size:.9rem}
+  .kiosk-layout{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;min-height:0}
+  .kiosk-column{gap:8px;min-height:0}
+  .kiosk-search{gap:8px}
+  .kiosk-suggestions{margin-top:0;gap:6px}
+  .kiosk-suggestion{padding:8px 10px}
+  .kiosk-employee{margin-top:0;padding:10px}
+  .kiosk-feedback{margin:0;padding:8px 10px;font-size:.9rem}
+  .pin-grid{margin-top:0;gap:8px}
+  .pin-key{padding:10px;font-size:1rem}
+  .pin-preview{margin-top:0;padding:8px 10px}
+  .selfie-box{margin-top:0;padding:10px;gap:8px}
+  .selfie-stage{width:min(200px,100%);max-height:31vh}
+  .selfie-actions{gap:8px}
+  .selfie-note{font-size:.72rem}
+  .kiosk-submit{margin-top:0}
+}
 
 @media (max-width:1100px){
   .auth-shell{grid-template-columns:1fr}
