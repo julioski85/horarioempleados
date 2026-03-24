@@ -46,6 +46,8 @@ final class AttendanceService
         foreach (self::DEFAULT_SETTINGS as $key => $value) {
             $ins->execute([$key, (string) $value]);
         }
+
+        self::ensureAttendanceRecordsColumns($pdo);
     }
 
     public static function loadSettings(PDO $pdo): array
@@ -183,5 +185,40 @@ final class AttendanceService
     {
         return new DateTimeImmutable($reference->format('Y-m-d') . ' ' . $time, $reference->getTimezone());
     }
-}
 
+    private static function ensureAttendanceRecordsColumns(PDO $pdo): void
+    {
+        $dbName = (string) $pdo->query('SELECT DATABASE()')->fetchColumn();
+        if ($dbName === '') {
+            return;
+        }
+
+        $requiredColumns = [
+            'shift_id' => 'BIGINT UNSIGNED NULL',
+            'status' => "VARCHAR(40) NOT NULL DEFAULT 'confirmado'",
+            'origin' => "VARCHAR(40) NOT NULL DEFAULT 'kiosk'",
+            'device_name' => 'VARCHAR(120) NULL',
+            'selfie_path' => 'VARCHAR(255) NULL',
+            'is_void' => 'TINYINT(1) NOT NULL DEFAULT 0',
+            'void_reason' => 'VARCHAR(255) NULL',
+        ];
+
+        $columnExistsSt = $pdo->prepare(
+            'SELECT 1
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = ?
+              AND TABLE_NAME = ?
+              AND COLUMN_NAME = ?
+            LIMIT 1'
+        );
+
+        foreach ($requiredColumns as $column => $definition) {
+            $columnExistsSt->execute([$dbName, 'attendance_records', $column]);
+            if ($columnExistsSt->fetchColumn()) {
+                continue;
+            }
+
+            $pdo->exec("ALTER TABLE attendance_records ADD COLUMN {$column} {$definition}");
+        }
+    }
+}
