@@ -50,6 +50,10 @@ final class KioskController
     public function nextAction(): void
     {
         $employeeId = (int) ($_GET['employee_id'] ?? 0);
+        if ($employeeId <= 0) {
+            Response::json(['ok' => false, 'message' => 'Empleado inválido']);
+        }
+
         $pdo = DB::pdo();
         AttendanceService::ensureSchema($pdo);
 
@@ -72,13 +76,17 @@ final class KioskController
 
         $st = $pdo->prepare('SELECT record_type FROM attendance_records WHERE employee_id=? AND is_void=0 ORDER BY recorded_at DESC LIMIT 1');
         $st->execute([$employeeId]);
-        $lastType = (string) $st->fetchColumn();
-        $action = $lastType === 'entrada' ? 'salida' : 'entrada';
+        $lastType = AttendanceService::normalizeRecordType((string) $st->fetchColumn());
+        $nextRecordType = $lastType === AttendanceService::DB_RECORD_TYPE_ENTRY
+            ? AttendanceService::DB_RECORD_TYPE_EXIT
+            : AttendanceService::DB_RECORD_TYPE_ENTRY;
+        $action = $nextRecordType === AttendanceService::DB_RECORD_TYPE_ENTRY ? 'entrada' : 'salida';
 
         if (!$shift) {
             Response::json([
                 'ok' => true,
                 'action' => $action,
+                'record_type' => $nextRecordType,
                 'employee' => [
                     'id' => (int) $employee['id'],
                     'full_name' => $employee['full_name'],
@@ -88,18 +96,20 @@ final class KioskController
                 'validation' => [
                     'allowed' => false,
                     'status' => 'sin_turno',
+                    'db_status' => AttendanceService::DB_STATUS_REST_DAY,
                     'ui_message' => 'No hay turno aplicable para este empleado en este momento.',
                 ],
             ]);
         }
 
-        $validation = $action === 'entrada'
+        $validation = $nextRecordType === AttendanceService::DB_RECORD_TYPE_ENTRY
             ? AttendanceService::classifyEntry($now, $shift, $settings)
             : AttendanceService::classifyExit($now, $shift, $settings, null);
 
         Response::json([
             'ok' => true,
             'action' => $action,
+            'record_type' => $nextRecordType,
             'employee' => [
                 'id' => (int) $employee['id'],
                 'full_name' => $employee['full_name'],
@@ -117,63 +127,90 @@ final class KioskController
 
     public function register(): void
     {
-        $employeeId = (int) ($_POST['employee_id'] ?? 0);
-        $pin = (string) ($_POST['pin'] ?? '');
-        $selfieData = trim((string) ($_POST['selfie_data'] ?? ''));
-        $pdo = DB::pdo();
-        AttendanceService::ensureSchema($pdo);
+        try {
+            $employeeId = (int) ($_POST['employee_id'] ?? 0);
+            $pin = (string) ($_POST['pin'] ?? '');
+            $selfieData = trim((string) ($_POST['selfie_data'] ?? ''));
+            if ($employeeId <= 0) {
+                Response::json(['ok' => false, 'message' => 'Empleado inválido']);
+            }
 
-        $st = $pdo->prepare('SELECT id,pin_hash,is_active FROM employees WHERE id=?');
-        $st->execute([$employeeId]);
-        $employee = $st->fetch(PDO::FETCH_ASSOC);
+            $pdo = DB::pdo();
+            AttendanceService::ensureSchema($pdo);
 
-        if (!$employee || (int) $employee['is_active'] !== 1 || !password_verify($pin, (string) $employee['pin_hash'])) {
-            Response::json(['ok' => false, 'message' => 'PIN incorrecto']);
+            $st = $pdo->prepare('SELECT id,pin_hash,is_active FROM employees WHERE id=?');
+            $st->execute([$employeeId]);
+            $employee = $st->fetch(PDO::FETCH_ASSOC);
+
+            if (!$employee || (int) $employee['is_active'] !== 1 || !password_verify($pin, (string) $employee['pin_hash'])) {
+                Response::json(['ok' => false, 'message' => 'PIN incorrecto']);
+            }
+            if ($selfieData === '') {
+                Response::json(['ok' => false, 'message' => 'La selfie es obligatoria']);
+            }
+
+            $last = $pdo->prepare('SELECT record_type FROM attendance_records WHERE employee_id=? AND is_void=0 ORDER BY recorded_at DESC LIMIT 1');
+            $last->execute([$employeeId]);
+            $lastType = AttendanceService::normalizeRecordType((string) $last->fetchColumn());
+            $recordType = $lastType === AttendanceService::DB_RECORD_TYPE_ENTRY
+                ? AttendanceService::DB_RECORD_TYPE_EXIT
+                : AttendanceService::DB_RECORD_TYPE_ENTRY;
+
+            $settings = AttendanceService::loadSettings($pdo);
+            $now = new DateTimeImmutable();
+            $weeklySchedule = AttendanceService::loadEmployeeWeeklySchedule($pdo, $employeeId);
+            $shift = AttendanceService::resolveCurrentShift($now, $weeklySchedule);
+            if (!$shift) {
+                Response::json(['ok' => false, 'message' => 'No hay turno aplicable en este momento']);
+            }
+
+            $validation = $recordType === AttendanceService::DB_RECORD_TYPE_ENTRY
+                ? AttendanceService::classifyEntry($now, $shift, $settings)
+                : AttendanceService::classifyExit($now, $shift, $settings, $this->lastEntryAt($pdo, $employeeId));
+
+            if (($validation['allowed'] ?? false) !== true) {
+                Response::json(['ok' => false, 'message' => (string) ($validation['ui_message'] ?? 'Marca fuera de rango')]);
+            }
+
+            $selfiePath = $this->storeSelfie($selfieData, $employeeId);
+            if ($selfiePath === null) {
+                Response::json(['ok' => false, 'message' => 'No se pudo guardar la selfie']);
+            }
+
+            $dbStatus = AttendanceService::mapInternalStatusToDbStatus(
+                (string) ($validation['status'] ?? ''),
+                $recordType
+            );
+            if (isset($validation['db_status'])) {
+                $dbStatus = AttendanceService::mapInternalStatusToDbStatus((string) $validation['db_status'], $recordType);
+            }
+
+            $ins = $pdo->prepare('INSERT INTO attendance_records(employee_id,shift_id,record_type,status,origin,device_name,selfie_path,recorded_at,is_void,void_reason) VALUES(?,?,?,?,?,?,?,?,?,?)');
+            $ins->execute([
+                $employeeId,
+                (int) $shift['id'],
+                $recordType,
+                $dbStatus,
+                'kiosk',
+                'web-kiosk',
+                $selfiePath,
+                $now->format('Y-m-d H:i:s'),
+                0,
+                null,
+            ]);
+
+            Response::json([
+                'ok' => true,
+                'message' => (string) ($validation['ui_message'] ?? 'Asistencia registrada'),
+                'record_type' => $recordType,
+                'status' => $dbStatus,
+            ]);
+        } catch (\Throwable $exception) {
+            Response::json([
+                'ok' => false,
+                'message' => 'No se pudo registrar la asistencia por un error de datos. Verifica el tipo de marca y el estado.',
+            ]);
         }
-        if ($selfieData === '') {
-            Response::json(['ok' => false, 'message' => 'La selfie es obligatoria']);
-        }
-
-        $last = $pdo->prepare('SELECT record_type FROM attendance_records WHERE employee_id=? AND is_void=0 ORDER BY recorded_at DESC LIMIT 1');
-        $last->execute([$employeeId]);
-        $recordType = ((string) $last->fetchColumn()) === 'entrada' ? 'salida' : 'entrada';
-
-        $settings = AttendanceService::loadSettings($pdo);
-        $now = new DateTimeImmutable();
-        $weeklySchedule = AttendanceService::loadEmployeeWeeklySchedule($pdo, $employeeId);
-        $shift = AttendanceService::resolveCurrentShift($now, $weeklySchedule);
-        if (!$shift) {
-            Response::json(['ok' => false, 'message' => 'No hay turno aplicable en este momento']);
-        }
-
-        $validation = $recordType === 'entrada'
-            ? AttendanceService::classifyEntry($now, $shift, $settings)
-            : AttendanceService::classifyExit($now, $shift, $settings, $this->lastEntryAt($pdo, $employeeId));
-
-        if (($validation['allowed'] ?? false) !== true) {
-            Response::json(['ok' => false, 'message' => (string) ($validation['ui_message'] ?? 'Marca fuera de rango')]);
-        }
-
-        $selfiePath = $this->storeSelfie($selfieData, $employeeId);
-        if ($selfiePath === null) {
-            Response::json(['ok' => false, 'message' => 'No se pudo guardar la selfie']);
-        }
-
-        $ins = $pdo->prepare('INSERT INTO attendance_records(employee_id,shift_id,record_type,status,origin,device_name,selfie_path,recorded_at,is_void,void_reason) VALUES(?,?,?,?,?,?,?,?,?,?)');
-        $ins->execute([
-            $employeeId,
-            (int) $shift['id'],
-            $recordType,
-            (string) ($validation['status'] ?? 'confirmado'),
-            'kiosk',
-            'web-kiosk',
-            $selfiePath,
-            $now->format('Y-m-d H:i:s'),
-            0,
-            null,
-        ]);
-
-        Response::json(['ok' => true, 'message' => (string) ($validation['ui_message'] ?? 'Asistencia registrada')]);
     }
 
     private function storeSelfie(string $selfieData, int $employeeId): ?string
@@ -209,7 +246,7 @@ final class KioskController
         $st = $pdo->prepare(
             "SELECT recorded_at
             FROM attendance_records
-            WHERE employee_id = ? AND is_void = 0 AND record_type = 'entrada'
+            WHERE employee_id = ? AND is_void = 0 AND record_type IN ('entry', 'entrada')
             ORDER BY recorded_at DESC
             LIMIT 1"
         );

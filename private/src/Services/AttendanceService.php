@@ -10,6 +10,19 @@ use PDO;
 
 final class AttendanceService
 {
+    public const DB_RECORD_TYPE_ENTRY = 'entry';
+    public const DB_RECORD_TYPE_EXIT = 'exit';
+    public const DB_STATUS_PENDING = 'pending';
+    public const DB_STATUS_ENTRY_REGISTERED = 'entry_registered';
+    public const DB_STATUS_EXIT_REGISTERED = 'exit_registered';
+    public const DB_STATUS_LATE = 'late';
+    public const DB_STATUS_EARLY_EXIT = 'early_exit';
+    public const DB_STATUS_INCOMPLETE = 'incomplete';
+    public const DB_STATUS_ABSENCE = 'absence';
+    public const DB_STATUS_MANUAL_INCIDENT = 'manual_incident';
+    public const DB_STATUS_VACATION = 'vacation';
+    public const DB_STATUS_REST_DAY = 'rest_day';
+
     public const DEFAULT_SETTINGS = [
         'entry_early_minutes' => 10,
         'entry_tolerance_minutes' => 10,
@@ -89,6 +102,7 @@ final class AttendanceService
             return [
                 'allowed' => false,
                 'status' => 'fuera_de_rango',
+                'db_status' => self::DB_STATUS_PENDING,
                 'ui_message' => 'Aún no puedes registrar entrada. Llegaste antes de la ventana permitida.',
                 'window_start' => $earlyWindowStart->format('H:i'),
             ];
@@ -98,15 +112,18 @@ final class AttendanceService
             return [
                 'allowed' => false,
                 'status' => 'fuera_de_rango',
+                'db_status' => self::DB_STATUS_PENDING,
                 'ui_message' => 'Se excedió el máximo permitido para entrada tardía.',
                 'window_start' => $earlyWindowStart->format('H:i'),
             ];
         }
 
         if ($now <= $punctualUntil) {
+            $internalStatus = $now <= $shiftStart ? 'a_tiempo' : 'en_tolerancia';
             return [
                 'allowed' => true,
-                'status' => $now <= $shiftStart ? 'a_tiempo' : 'en_tolerancia',
+                'status' => $internalStatus,
+                'db_status' => self::mapInternalStatusToDbStatus($internalStatus, self::DB_RECORD_TYPE_ENTRY),
                 'ui_message' => $now <= $shiftStart ? 'Entrada a tiempo.' : 'Entrada válida dentro de tolerancia.',
                 'window_start' => $earlyWindowStart->format('H:i'),
             ];
@@ -116,6 +133,7 @@ final class AttendanceService
             return [
                 'allowed' => true,
                 'status' => 'retardo',
+                'db_status' => self::mapInternalStatusToDbStatus('retardo', self::DB_RECORD_TYPE_ENTRY),
                 'ui_message' => 'Entrada registrada con retardo.',
                 'window_start' => $earlyWindowStart->format('H:i'),
             ];
@@ -124,6 +142,7 @@ final class AttendanceService
         return [
             'allowed' => true,
             'status' => 'en_tolerancia',
+            'db_status' => self::mapInternalStatusToDbStatus('en_tolerancia', self::DB_RECORD_TYPE_ENTRY),
             'ui_message' => 'Entrada válida dentro de tolerancia.',
             'window_start' => $earlyWindowStart->format('H:i'),
         ];
@@ -139,6 +158,7 @@ final class AttendanceService
                 return [
                     'allowed' => false,
                     'status' => 'fuera_de_rango',
+                    'db_status' => self::DB_STATUS_PENDING,
                     'ui_message' => 'Aún no puedes registrar salida. Debe pasar el tiempo mínimo desde la entrada.',
                 ];
             }
@@ -148,6 +168,7 @@ final class AttendanceService
             return [
                 'allowed' => false,
                 'status' => 'fuera_de_rango',
+                'db_status' => self::DB_STATUS_PENDING,
                 'ui_message' => 'La salida anticipada no está permitida para este turno.',
             ];
         }
@@ -155,8 +176,55 @@ final class AttendanceService
         return [
             'allowed' => true,
             'status' => 'confirmado',
+            'db_status' => self::mapInternalStatusToDbStatus('confirmado', self::DB_RECORD_TYPE_EXIT),
             'ui_message' => 'Salida registrada correctamente.',
         ];
+    }
+
+    public static function mapInternalStatusToDbStatus(string $internalStatus, string $recordType): string
+    {
+        $normalizedType = self::normalizeRecordType($recordType);
+        $map = [
+            'a_tiempo' => self::DB_STATUS_ENTRY_REGISTERED,
+            'en_tolerancia' => self::DB_STATUS_ENTRY_REGISTERED,
+            'retardo' => self::DB_STATUS_LATE,
+            'confirmado' => $normalizedType === self::DB_RECORD_TYPE_EXIT ? self::DB_STATUS_EXIT_REGISTERED : self::DB_STATUS_ENTRY_REGISTERED,
+            'fuera_de_rango' => self::DB_STATUS_PENDING,
+            'sin_turno' => self::DB_STATUS_REST_DAY,
+        ];
+
+        if (isset($map[$internalStatus])) {
+            return $map[$internalStatus];
+        }
+
+        $validDbStatuses = [
+            self::DB_STATUS_PENDING,
+            self::DB_STATUS_ENTRY_REGISTERED,
+            self::DB_STATUS_EXIT_REGISTERED,
+            self::DB_STATUS_LATE,
+            self::DB_STATUS_EARLY_EXIT,
+            self::DB_STATUS_INCOMPLETE,
+            self::DB_STATUS_ABSENCE,
+            self::DB_STATUS_MANUAL_INCIDENT,
+            self::DB_STATUS_VACATION,
+            self::DB_STATUS_REST_DAY,
+        ];
+
+        return in_array($internalStatus, $validDbStatuses, true) ? $internalStatus : self::DB_STATUS_PENDING;
+    }
+
+    public static function normalizeRecordType(?string $recordType): ?string
+    {
+        $value = mb_strtolower(trim((string) $recordType));
+        if ($value === '') {
+            return null;
+        }
+
+        return match ($value) {
+            'entry', 'entrada' => self::DB_RECORD_TYPE_ENTRY,
+            'exit', 'salida' => self::DB_RECORD_TYPE_EXIT,
+            default => null,
+        };
     }
 
     public static function resolveCurrentShift(DateTimeImmutable $now, array $weeklyShifts): ?array
@@ -195,7 +263,7 @@ final class AttendanceService
 
         $requiredColumns = [
             'shift_id' => 'BIGINT UNSIGNED NULL',
-            'status' => "VARCHAR(40) NOT NULL DEFAULT 'confirmado'",
+            'status' => "VARCHAR(40) NOT NULL DEFAULT 'pending'",
             'origin' => "VARCHAR(40) NOT NULL DEFAULT 'kiosk'",
             'device_name' => 'VARCHAR(120) NULL',
             'selfie_path' => 'VARCHAR(255) NULL',
