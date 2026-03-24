@@ -270,6 +270,8 @@ final class AttendanceService
             'selfie_path' => 'VARCHAR(255) NULL',
             'is_void' => 'TINYINT(1) NOT NULL DEFAULT 0',
             'void_reason' => 'VARCHAR(255) NULL',
+            'voided_by_user_id' => 'BIGINT UNSIGNED NULL',
+            'voided_at' => 'DATETIME NULL',
         ];
 
         $columnExistsSt = $pdo->prepare(

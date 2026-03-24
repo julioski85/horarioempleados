@@ -55,6 +55,15 @@ let kioskDebounceTimer = null;
 let kioskCameraStream = null;
 let selectedEmployee = null;
 let kioskVideoNeedsPortraitRotation = false;
+let kioskResetTimer = null;
+
+const KIOSK_DEFAULTS = {
+  avatarPath: '/assets/uploads/base/avatar-base.svg',
+  employeeName: 'Empleado',
+  employeeStatus: 'Sin seleccionar',
+  shiftText: 'Turno: sin turno',
+  feedbackText: 'Busca y selecciona un empleado para continuar.',
+};
 
 function kioskSetFeedback(message, tone) {
   const feedback = document.getElementById('kiosk-feedback');
@@ -111,6 +120,67 @@ async function kioskSelectEmployee(employee) {
     shiftNode.textContent = 'Turno: no disponible';
   }
   kioskSetFeedback(data.validation?.ui_message || 'Empleado seleccionado.', data.validation?.allowed ? 'ok' : 'warn');
+}
+
+function kioskStopCamera() {
+  if (!kioskCameraStream) return;
+  kioskCameraStream.getTracks().forEach((track) => track.stop());
+  kioskCameraStream = null;
+}
+
+function kioskResetState(options) {
+  const settings = Object.assign({ keepFeedback: false }, options || {});
+  if (kioskResetTimer) {
+    clearTimeout(kioskResetTimer);
+    kioskResetTimer = null;
+  }
+
+  selectedEmployee = null;
+  const employeeId = document.getElementById('employee-id');
+  const pinValue = document.getElementById('pin-value');
+  const selfieData = document.getElementById('selfie-data');
+  const searchInput = document.getElementById('kiosk-search');
+  const employeeCard = document.getElementById('kiosk-employee');
+  const shiftNode = document.getElementById('kiosk-shift');
+  const selfiePreview = document.getElementById('selfie-preview');
+  const selfieVideo = document.getElementById('selfie-video');
+  const pinPreview = document.getElementById('pin-preview');
+
+  if (employeeId) employeeId.value = '';
+  if (pinValue) pinValue.value = '';
+  if (selfieData) selfieData.value = '';
+  if (searchInput) searchInput.value = '';
+  renderKioskSuggestions([]);
+  kioskStopCamera();
+  kioskVideoNeedsPortraitRotation = false;
+
+  if (employeeCard) {
+    const nameNode = employeeCard.querySelector('strong');
+    const statusNode = employeeCard.querySelector('span');
+    const imageNode = employeeCard.querySelector('img');
+    if (nameNode) nameNode.textContent = KIOSK_DEFAULTS.employeeName;
+    if (statusNode) statusNode.textContent = KIOSK_DEFAULTS.employeeStatus;
+    if (imageNode) {
+      imageNode.src = (window.toUrl ? window.toUrl('') : '') + KIOSK_DEFAULTS.avatarPath;
+    }
+  }
+
+  if (shiftNode) shiftNode.textContent = KIOSK_DEFAULTS.shiftText;
+  if (pinPreview) pinPreview.textContent = 'PIN ingresado: ••••••';
+
+  if (selfiePreview) {
+    selfiePreview.style.display = 'none';
+    selfiePreview.removeAttribute('src');
+  }
+
+  if (selfieVideo) {
+    selfieVideo.srcObject = null;
+    selfieVideo.classList.remove('selfie-video-portrait-rotated');
+  }
+
+  if (!settings.keepFeedback) {
+    kioskSetFeedback(KIOSK_DEFAULTS.feedbackText, '');
+  }
 }
 
 function kioskBindSearchInput() {
@@ -245,10 +315,10 @@ async function kioskRegister() {
     const data = await res.json();
     kioskSetFeedback(data.message || 'Listo', data.ok ? 'ok' : 'error');
     if (data.ok) {
-      document.getElementById('pin-value').value = '';
-      document.getElementById('selfie-data').value = '';
-      document.getElementById('selfie-preview').style.display = 'none';
-      document.getElementById('pin-preview').textContent = 'PIN ingresado: ••••••';
+      kioskResetState({ keepFeedback: true });
+      kioskResetTimer = setTimeout(() => {
+        kioskResetState({ keepFeedback: false });
+      }, 2600);
     }
   } catch (error) {
     kioskSetFeedback('No se pudo confirmar la asistencia. Revisa conexión e inténtalo de nuevo.', 'error');
@@ -266,6 +336,7 @@ function escapeHtml(value) {
 
 document.addEventListener('DOMContentLoaded', () => {
   kioskBindSearchInput();
+  kioskResetState();
 });
 
 window.kioskSearch = kioskSearch;
