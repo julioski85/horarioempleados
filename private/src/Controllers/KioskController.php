@@ -13,6 +13,24 @@ use PDO;
 
 final class KioskController
 {
+    private const ALLOWED_RECORD_TYPES = [
+        AttendanceService::DB_RECORD_TYPE_ENTRY,
+        AttendanceService::DB_RECORD_TYPE_EXIT,
+    ];
+
+    private const ALLOWED_DB_STATUSES = [
+        AttendanceService::DB_STATUS_PENDING,
+        AttendanceService::DB_STATUS_ENTRY_REGISTERED,
+        AttendanceService::DB_STATUS_EXIT_REGISTERED,
+        AttendanceService::DB_STATUS_LATE,
+        AttendanceService::DB_STATUS_EARLY_EXIT,
+        AttendanceService::DB_STATUS_INCOMPLETE,
+        AttendanceService::DB_STATUS_ABSENCE,
+        AttendanceService::DB_STATUS_MANUAL_INCIDENT,
+        AttendanceService::DB_STATUS_VACATION,
+        AttendanceService::DB_STATUS_REST_DAY,
+    ];
+
     public function index(): void
     {
         View::render('kiosk/index', ['title' => 'Kiosco', 'show_floating_theme' => false], 'layouts/blank');
@@ -185,10 +203,19 @@ final class KioskController
                 $dbStatus = AttendanceService::mapInternalStatusToDbStatus((string) $validation['db_status'], $recordType);
             }
 
-            $ins = $pdo->prepare('INSERT INTO attendance_records(employee_id,shift_id,record_type,status,origin,device_name,selfie_path,recorded_at,is_void,void_reason) VALUES(?,?,?,?,?,?,?,?,?,?)');
-            $ins->execute([
+            if (!in_array($recordType, self::ALLOWED_RECORD_TYPES, true)) {
+                throw new \RuntimeException('record_type inválido para attendance_records: ' . $recordType);
+            }
+            if (!in_array($dbStatus, self::ALLOWED_DB_STATUSES, true)) {
+                throw new \RuntimeException('status inválido para attendance_records: ' . $dbStatus);
+            }
+
+            $employeeScheduleShiftId = isset($shift['id']) ? (int) $shift['id'] : null;
+            $legacyShiftId = $this->resolveLegacyShiftId($pdo, $shift);
+            $params = [
                 $employeeId,
-                (int) $shift['id'],
+                $legacyShiftId,
+                $employeeScheduleShiftId,
                 $recordType,
                 $dbStatus,
                 'kiosk',
@@ -197,7 +224,17 @@ final class KioskController
                 $now->format('Y-m-d H:i:s'),
                 0,
                 null,
-            ]);
+            ];
+
+            $ins = $pdo->prepare(
+                'INSERT INTO attendance_records(employee_id,shift_id,employee_schedule_shift_id,record_type,status,origin,device_name,selfie_path,recorded_at,is_void,void_reason) VALUES(?,?,?,?,?,?,?,?,?,?,?)'
+            );
+            try {
+                $ins->execute($params);
+            } catch (\PDOException $pdoException) {
+                error_log('[kiosk/register] INSERT attendance_records failed. params=' . json_encode($params, JSON_UNESCAPED_UNICODE) . ' | message=' . $pdoException->getMessage());
+                throw $pdoException;
+            }
 
             Response::json([
                 'ok' => true,
@@ -206,6 +243,13 @@ final class KioskController
                 'status' => $dbStatus,
             ]);
         } catch (\Throwable $exception) {
+            $sqlErrorInfo = null;
+            if ($exception instanceof \PDOException) {
+                /** @var mixed $rawErrorInfo */
+                $rawErrorInfo = $exception->errorInfo;
+                $sqlErrorInfo = is_array($rawErrorInfo) ? json_encode($rawErrorInfo, JSON_UNESCAPED_UNICODE) : null;
+            }
+            error_log('[kiosk/register] SQL/PDO error: ' . $exception->getMessage() . ($sqlErrorInfo ? ' | errorInfo=' . $sqlErrorInfo : ''));
             Response::json([
                 'ok' => false,
                 'message' => 'No se pudo registrar la asistencia por un error de datos. Verifica el tipo de marca y el estado.',
@@ -256,5 +300,28 @@ final class KioskController
             return null;
         }
         return new DateTimeImmutable((string) $value);
+    }
+
+    private function resolveLegacyShiftId(PDO $pdo, array $shift): ?int
+    {
+        $candidate = null;
+        if (isset($shift['shift_id'])) {
+            $candidate = (int) $shift['shift_id'];
+        } elseif (isset($shift['legacy_shift_id'])) {
+            $candidate = (int) $shift['legacy_shift_id'];
+        }
+
+        if ($candidate === null || $candidate <= 0) {
+            return null;
+        }
+
+        $st = $pdo->prepare('SELECT id FROM shifts WHERE id = ? LIMIT 1');
+        $st->execute([$candidate]);
+        $exists = $st->fetchColumn();
+        if ($exists === false) {
+            return null;
+        }
+
+        return (int) $exists;
     }
 }

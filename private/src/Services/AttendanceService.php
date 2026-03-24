@@ -263,6 +263,7 @@ final class AttendanceService
 
         $requiredColumns = [
             'shift_id' => 'BIGINT UNSIGNED NULL',
+            'employee_schedule_shift_id' => 'BIGINT UNSIGNED NULL',
             'status' => "VARCHAR(40) NOT NULL DEFAULT 'pending'",
             'origin' => "VARCHAR(40) NOT NULL DEFAULT 'kiosk'",
             'device_name' => 'VARCHAR(120) NULL',
