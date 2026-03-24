@@ -346,6 +346,114 @@ final class AdminController
         View::render('admin/reports', ['rows' => $rows, 'title' => 'Reportes']);
     }
 
+    public function attendanceRecords(): void
+    {
+        Auth::requireRole('admin');
+        $pdo = DB::pdo();
+        AttendanceService::ensureSchema($pdo);
+
+        $filter = (string) ($_GET['filter'] ?? 'active');
+        if (!in_array($filter, ['active', 'void', 'all'], true)) {
+            $filter = 'active';
+        }
+
+        $where = '';
+        if ($filter === 'active') {
+            $where = 'WHERE ar.is_void = 0';
+        } elseif ($filter === 'void') {
+            $where = 'WHERE ar.is_void = 1';
+        }
+
+        $rows = $pdo->query(
+            "SELECT
+                ar.id,
+                ar.employee_id,
+                e.full_name,
+                ar.record_type,
+                ar.status,
+                ar.origin,
+                ar.recorded_at,
+                ar.is_void,
+                ar.void_reason,
+                ar.voided_at,
+                ar.voided_by_user_id,
+                u.full_name AS voided_by_name
+            FROM attendance_records ar
+            JOIN employees e ON e.id = ar.employee_id
+            LEFT JOIN employees u ON u.id = ar.voided_by_user_id
+            {$where}
+            ORDER BY ar.recorded_at DESC
+            LIMIT 200"
+        )->fetchAll(PDO::FETCH_ASSOC);
+
+        View::render('admin/attendance-records', [
+            'rows' => $rows,
+            'filter' => $filter,
+            'csrf' => Csrf::token(),
+            'title' => 'Registros de asistencia',
+        ]);
+    }
+
+    public function voidAttendanceRecord(): void
+    {
+        Auth::requireRole('admin');
+        if (!Csrf::check($_POST['_csrf'] ?? null)) {
+            Response::redirect('/admin/attendance-records');
+        }
+
+        $recordId = (int) ($_POST['record_id'] ?? 0);
+        $reason = trim((string) ($_POST['void_reason'] ?? ''));
+        if ($recordId <= 0 || $reason === '') {
+            Response::redirect('/admin/attendance-records?filter=all');
+        }
+
+        $actor = Auth::user();
+        $actorEmployeeId = (int) ($actor['id'] ?? 0);
+
+        $pdo = DB::pdo();
+        AttendanceService::ensureSchema($pdo);
+        $st = $pdo->prepare(
+            'UPDATE attendance_records
+            SET is_void = 1,
+                void_reason = ?,
+                voided_by_user_id = ?,
+                voided_at = NOW()
+            WHERE id = ?
+              AND is_void = 0'
+        );
+        $st->execute([$reason, $actorEmployeeId > 0 ? $actorEmployeeId : null, $recordId]);
+
+        Response::redirect('/admin/attendance-records?filter=all');
+    }
+
+    public function restoreAttendanceRecord(): void
+    {
+        Auth::requireRole('admin');
+        if (!Csrf::check($_POST['_csrf'] ?? null)) {
+            Response::redirect('/admin/attendance-records');
+        }
+
+        $recordId = (int) ($_POST['record_id'] ?? 0);
+        if ($recordId <= 0) {
+            Response::redirect('/admin/attendance-records?filter=all');
+        }
+
+        $pdo = DB::pdo();
+        AttendanceService::ensureSchema($pdo);
+        $st = $pdo->prepare(
+            'UPDATE attendance_records
+            SET is_void = 0,
+                void_reason = NULL,
+                voided_by_user_id = NULL,
+                voided_at = NULL
+            WHERE id = ?
+              AND is_void = 1'
+        );
+        $st->execute([$recordId]);
+
+        Response::redirect('/admin/attendance-records?filter=all');
+    }
+
     public function exportCsv(): void
     {
         Auth::requireRole('admin');
