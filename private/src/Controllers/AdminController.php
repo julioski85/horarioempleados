@@ -336,14 +336,59 @@ final class AdminController
     {
         Auth::requireRole('admin');
         $pdo = DB::pdo();
-        $rows = $pdo->query(
-            'SELECT e.full_name,ar.record_type AS event_type,ar.recorded_at AS created_at
+        $filters = $this->collectReportFilters();
+
+        $where = ['ar.is_void = 0'];
+        $params = [];
+        if ($filters['employee_id'] > 0) {
+            $where[] = 'ar.employee_id = ?';
+            $params[] = $filters['employee_id'];
+        }
+        if ($filters['date_from'] !== '') {
+            $where[] = 'DATE(ar.recorded_at) >= ?';
+            $params[] = $filters['date_from'];
+        }
+        if ($filters['date_to'] !== '') {
+            $where[] = 'DATE(ar.recorded_at) <= ?';
+            $params[] = $filters['date_to'];
+        }
+
+        $sql = "SELECT
+                e.id AS employee_id,
+                e.full_name,
+                ar.record_type AS event_type,
+                ar.recorded_at AS created_at,
+                ar.status,
+                CASE
+                    WHEN ar.record_type = '" . AttendanceService::DB_RECORD_TYPE_ENTRY . "' AND ar.status = '" . AttendanceService::DB_STATUS_LATE . "' THEN 'con_retardo'
+                    WHEN ar.record_type = '" . AttendanceService::DB_RECORD_TYPE_ENTRY . "' THEN 'a_tiempo'
+                    ELSE ''
+                END AS punctuality
             FROM attendance_records ar
-            JOIN employees e ON e.id=ar.employee_id
-            WHERE ar.is_void=0
-            ORDER BY ar.recorded_at DESC LIMIT 30'
-        )->fetchAll(PDO::FETCH_ASSOC);
-        View::render('admin/reports', ['rows' => $rows, 'title' => 'Reportes']);
+            JOIN employees e ON e.id = ar.employee_id
+            WHERE " . implode(' AND ', $where) . '
+            ORDER BY ar.recorded_at DESC
+            LIMIT 300';
+        $st = $pdo->prepare($sql);
+        $st->execute($params);
+        $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+
+        $employees = $pdo->query('SELECT id, full_name FROM employees WHERE is_active = 1 ORDER BY full_name ASC')->fetchAll(PDO::FETCH_ASSOC);
+        $query = http_build_query(array_filter([
+            'employee_id' => $filters['employee_id'] > 0 ? (string) $filters['employee_id'] : null,
+            'date_from' => $filters['date_from'] !== '' ? $filters['date_from'] : null,
+            'date_to' => $filters['date_to'] !== '' ? $filters['date_to'] : null,
+        ]));
+        $basePath = rtrim((string) ($_ENV['APP_BASE_PATH'] ?? ''), '/');
+        $exportUrl = $basePath . '/admin/reports/export-csv' . ($query !== '' ? ('?' . $query) : '');
+
+        View::render('admin/reports', [
+            'rows' => $rows,
+            'employees' => $employees,
+            'filters' => $filters,
+            'export_url' => $exportUrl,
+            'title' => 'Reportes',
+        ]);
     }
 
     public function attendanceRecords(): void
@@ -458,22 +503,79 @@ final class AdminController
     {
         Auth::requireRole('admin');
         $pdo = DB::pdo();
-        $rows = $pdo->query(
-            'SELECT e.full_name,ar.record_type AS event_type,ar.recorded_at AS created_at
+        $filters = $this->collectReportFilters();
+        $where = ['ar.is_void = 0'];
+        $params = [];
+
+        if ($filters['employee_id'] > 0) {
+            $where[] = 'ar.employee_id = ?';
+            $params[] = $filters['employee_id'];
+        }
+        if ($filters['date_from'] !== '') {
+            $where[] = 'DATE(ar.recorded_at) >= ?';
+            $params[] = $filters['date_from'];
+        }
+        if ($filters['date_to'] !== '') {
+            $where[] = 'DATE(ar.recorded_at) <= ?';
+            $params[] = $filters['date_to'];
+        }
+
+        $st = $pdo->prepare(
+            "SELECT
+                e.full_name,
+                ar.record_type AS event_type,
+                ar.recorded_at AS created_at,
+                ar.status,
+                CASE
+                    WHEN ar.record_type = '" . AttendanceService::DB_RECORD_TYPE_ENTRY . "' AND ar.status = '" . AttendanceService::DB_STATUS_LATE . "' THEN 'Con retardo'
+                    WHEN ar.record_type = '" . AttendanceService::DB_RECORD_TYPE_ENTRY . "' THEN 'A tiempo'
+                    ELSE 'N/A'
+                END AS punctuality
             FROM attendance_records ar
-            JOIN employees e ON e.id=ar.employee_id
-            WHERE ar.is_void=0
+            JOIN employees e ON e.id = ar.employee_id
+            WHERE " . implode(' AND ', $where) . '
             ORDER BY ar.recorded_at DESC'
-        )->fetchAll(PDO::FETCH_ASSOC);
+        );
+        $st->execute($params);
+        $rows = $st->fetchAll(PDO::FETCH_ASSOC);
         header('Content-Type: text/csv; charset=utf-8');
         header('Content-Disposition: attachment; filename=reporte-asistencia.csv');
         $out = fopen('php://output', 'w');
-        fputcsv($out, ['Empleado', 'Evento', 'Fecha']);
+        fputcsv($out, ['Empleado', 'Evento', 'Puntualidad entrada', 'Estado técnico', 'Fecha']);
         foreach ($rows as $r) {
-            fputcsv($out, [$r['full_name'], $r['event_type'], $r['created_at']]);
+            fputcsv($out, [$r['full_name'], $r['event_type'], $r['punctuality'], $r['status'], $r['created_at']]);
         }
         fclose($out);
         exit;
+    }
+
+    private function collectReportFilters(): array
+    {
+        $employeeId = (int) ($_GET['employee_id'] ?? 0);
+        $dateFrom = trim((string) ($_GET['date_from'] ?? ''));
+        $dateTo = trim((string) ($_GET['date_to'] ?? ''));
+
+        if ($dateFrom !== '' && !$this->isValidDate($dateFrom)) {
+            $dateFrom = '';
+        }
+        if ($dateTo !== '' && !$this->isValidDate($dateTo)) {
+            $dateTo = '';
+        }
+        if ($dateFrom !== '' && $dateTo !== '' && $dateFrom > $dateTo) {
+            [$dateFrom, $dateTo] = [$dateTo, $dateFrom];
+        }
+
+        return [
+            'employee_id' => max(0, $employeeId),
+            'date_from' => $dateFrom,
+            'date_to' => $dateTo,
+        ];
+    }
+
+    private function isValidDate(string $date): bool
+    {
+        $parsed = \DateTimeImmutable::createFromFormat('Y-m-d', $date);
+        return $parsed !== false && $parsed->format('Y-m-d') === $date;
     }
 
     private function storeEmployeePhoto(mixed $photo): string
