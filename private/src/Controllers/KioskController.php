@@ -77,6 +77,7 @@ final class KioskController
 
         $settings = AttendanceService::loadSettings($pdo);
         $now = new DateTimeImmutable();
+        $reconciledIncomplete = $this->reconcilePreviousDayOpenEntry($pdo, $employeeId, $now);
         $weeklySchedule = AttendanceService::loadEmployeeWeeklySchedule($pdo, $employeeId);
         $shift = AttendanceService::resolveCurrentShift($now, $weeklySchedule);
 
@@ -140,6 +141,7 @@ final class KioskController
                 'end_time' => $shift['end_time'],
             ],
             'validation' => $validation,
+            'reconciled_incomplete' => $reconciledIncomplete,
         ]);
     }
 
@@ -155,6 +157,8 @@ final class KioskController
 
             $pdo = DB::pdo();
             AttendanceService::ensureSchema($pdo);
+            $now = new DateTimeImmutable();
+            $this->reconcilePreviousDayOpenEntry($pdo, $employeeId, $now);
 
             $st = $pdo->prepare('SELECT id,pin_hash,is_active FROM employees WHERE id=?');
             $st->execute([$employeeId]);
@@ -175,7 +179,6 @@ final class KioskController
                 : AttendanceService::DB_RECORD_TYPE_ENTRY;
 
             $settings = AttendanceService::loadSettings($pdo);
-            $now = new DateTimeImmutable();
             $weeklySchedule = AttendanceService::loadEmployeeWeeklySchedule($pdo, $employeeId);
             $shift = AttendanceService::resolveCurrentShift($now, $weeklySchedule);
             if (!$shift) {
@@ -283,6 +286,53 @@ final class KioskController
         }
 
         return $relativeDir . '/' . $name;
+    }
+
+    private function reconcilePreviousDayOpenEntry(PDO $pdo, int $employeeId, DateTimeImmutable $now): bool
+    {
+        $lastRecordSt = $pdo->prepare(
+            'SELECT id, record_type, status, DATE(recorded_at) AS record_date
+            FROM attendance_records
+            WHERE employee_id = ?
+              AND is_void = 0
+            ORDER BY recorded_at DESC
+            LIMIT 1'
+        );
+        $lastRecordSt->execute([$employeeId]);
+        $lastRecord = $lastRecordSt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$lastRecord) {
+            return false;
+        }
+
+        $lastType = AttendanceService::normalizeRecordType((string) ($lastRecord['record_type'] ?? ''));
+        if ($lastType !== AttendanceService::DB_RECORD_TYPE_ENTRY) {
+            return false;
+        }
+
+        $today = $now->format('Y-m-d');
+        $recordDate = (string) ($lastRecord['record_date'] ?? '');
+        if ($recordDate === '' || $recordDate >= $today) {
+            return false;
+        }
+
+        $status = (string) ($lastRecord['status'] ?? '');
+        if ($status === AttendanceService::DB_STATUS_INCOMPLETE) {
+            return true;
+        }
+
+        $updateSt = $pdo->prepare(
+            'UPDATE attendance_records
+            SET status = ?
+            WHERE id = ?
+              AND is_void = 0'
+        );
+        $updateSt->execute([
+            AttendanceService::DB_STATUS_INCOMPLETE,
+            (int) $lastRecord['id'],
+        ]);
+
+        return true;
     }
 
     private function lastEntryAt(PDO $pdo, int $employeeId): ?DateTimeImmutable

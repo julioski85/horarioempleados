@@ -361,6 +361,7 @@ final class AdminController
                 ar.status,
                 CASE
                     WHEN ar.record_type = '" . AttendanceService::DB_RECORD_TYPE_ENTRY . "' AND ar.status = '" . AttendanceService::DB_STATUS_LATE . "' THEN 'con_retardo'
+                    WHEN ar.record_type = '" . AttendanceService::DB_RECORD_TYPE_ENTRY . "' AND ar.status = '" . AttendanceService::DB_STATUS_INCOMPLETE . "' THEN 'incompleto'
                     WHEN ar.record_type = '" . AttendanceService::DB_RECORD_TYPE_ENTRY . "' THEN 'a_tiempo'
                     ELSE ''
                 END AS punctuality
@@ -528,6 +529,7 @@ final class AdminController
                 ar.status,
                 CASE
                     WHEN ar.record_type = '" . AttendanceService::DB_RECORD_TYPE_ENTRY . "' AND ar.status = '" . AttendanceService::DB_STATUS_LATE . "' THEN 'Con retardo'
+                    WHEN ar.record_type = '" . AttendanceService::DB_RECORD_TYPE_ENTRY . "' AND ar.status = '" . AttendanceService::DB_STATUS_INCOMPLETE . "' THEN 'Incompleto'
                     WHEN ar.record_type = '" . AttendanceService::DB_RECORD_TYPE_ENTRY . "' THEN 'A tiempo'
                     ELSE 'N/A'
                 END AS punctuality
