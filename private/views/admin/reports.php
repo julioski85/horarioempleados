@@ -41,8 +41,16 @@
         <?php foreach ($rows as $row): ?>
           <?php
             $punctuality = (string) ($row['punctuality'] ?? '');
-            $badgeClass = $punctuality === 'con_retardo' ? 'warn' : 'ok';
-            $badgeText = $punctuality === 'con_retardo' ? 'Con retardo' : 'A tiempo';
+            if ($punctuality === 'con_retardo') {
+                $badgeClass = 'warn';
+                $badgeText = 'Con retardo';
+            } elseif ($punctuality === 'incompleto') {
+                $badgeClass = 'danger';
+                $badgeText = 'Incompleto';
+            } else {
+                $badgeClass = 'ok';
+                $badgeText = 'A tiempo';
+            }
           ?>
           <tr>
             <td><?= htmlspecialchars((string) $row['full_name']) ?></td>
